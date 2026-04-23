@@ -1,0 +1,1464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5G NR PDSCH Simulator — Interactive Explainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0c0f;
+  --surface: #111318;
+  --card: #161920;
+  --border: #1e2229;
+  --border2: #252c36;
+  --accent: #00d4ff;
+  --accent2: #7c3aed;
+  --green: #00e5a0;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --text: #e8edf5;
+  --muted: #6b7280;
+  --subtle: #3a4150;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Syne', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+/* ── HEADER ── */
+header {
+  border-bottom: 1px solid var(--border);
+  padding: 0 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  position: sticky;
+  top: 0;
+  background: rgba(10,12,15,0.92);
+  backdrop-filter: blur(12px);
+  z-index: 100;
+}
+.logo {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.logo span { color: var(--muted); font-weight: 400; }
+.header-right { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+/* ── HERO ── */
+.hero {
+  padding: 4rem 2rem 3rem;
+  max-width: 960px;
+  margin: 0 auto;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -80px; left: -100px;
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, rgba(0,212,255,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  border: 1px solid rgba(0,212,255,0.2);
+  padding: 4px 10px;
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+  letter-spacing: 0.08em;
+}
+.hero-tag::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+h1 {
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin-bottom: 1rem;
+}
+h1 em { font-style: normal; color: var(--accent); }
+.hero-sub {
+  font-size: 15px;
+  color: var(--muted);
+  max-width: 600px;
+  line-height: 1.7;
+  margin-bottom: 2rem;
+}
+.hero-meta {
+  display: flex;
+  gap: 2rem;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.hero-meta span { color: var(--text); }
+
+/* ── NAV TABS ── */
+.nav-wrap {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: 56px;
+  z-index: 90;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.nav-wrap::-webkit-scrollbar { display: none; }
+.nav-tabs {
+  display: flex;
+  padding: 0 2rem;
+  min-width: max-content;
+}
+.tab-btn {
+  padding: 0 1rem;
+  height: 44px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  transition: color .15s, border-color .15s;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── MAIN LAYOUT ── */
+.main { max-width: 960px; margin: 0 auto; padding: 2rem; }
+.block-panel { display: none; animation: fadein .2s ease; }
+.block-panel.active { display: block; }
+@keyframes fadein { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── BLOCK HEADER ── */
+.block-header { margin-bottom: 2rem; }
+.block-num {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  margin-bottom: 0.5rem;
+}
+.block-title {
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.75rem;
+}
+.block-desc {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.7;
+  max-width: 680px;
+}
+
+/* ── CONCEPT CARD ── */
+.concept-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.concept-card h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+.concept-card p {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.8;
+  margin-bottom: 0.75rem;
+}
+.concept-card p:last-child { margin-bottom: 0; }
+.concept-card strong { color: var(--text); font-weight: 500; }
+
+/* ── TWO COL ── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+@media(max-width:640px){ .two-col { grid-template-columns: 1fr; } }
+
+/* ── CODE BLOCK ── */
+.code-wrap {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.code-header {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.code-header span { color: var(--green); }
+pre {
+  padding: 1rem 1.25rem;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
+  color: #abb2bf;
+  overflow-x: auto;
+  white-space: pre;
+}
+.kw { color: #c678dd; }
+.fn { color: #61afef; }
+.str { color: #98c379; }
+.cm { color: #5c6370; font-style: italic; }
+.num { color: #d19a66; }
+.var { color: #e06c75; }
+
+/* ── INTERACTIVE AREA ── */
+.interactive {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.interactive h3 {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--green);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 1.25rem;
+}
+
+/* ── BIT ELEMENTS ── */
+.bit-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+.bit {
+  width: 38px; height: 38px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 15px; font-weight: 700;
+  border: 1px solid var(--border2);
+  background: var(--surface);
+  color: var(--muted);
+  transition: all .12s;
+  cursor: pointer;
+  user-select: none;
+}
+.bit.one { background: rgba(0,212,255,0.12); color: var(--accent); border-color: rgba(0,212,255,0.3); }
+.bit.parity { background: rgba(0,229,160,0.1); color: var(--green); border-color: rgba(0,229,160,0.25); cursor:default; }
+.bit.error { background: rgba(239,68,68,0.15); color: var(--red); border-color: rgba(239,68,68,0.35); }
+.bit.pilot { background: rgba(245,158,11,0.12); color: var(--amber); border-color: rgba(245,158,11,0.3); cursor:default; }
+
+/* ── MATRIX ── */
+.matrix { display: inline-flex; flex-direction:column; gap:3px; margin-bottom:1rem; }
+.matrix-row { display: flex; gap: 3px; align-items: center; }
+.cell {
+  width: 28px; height: 28px;
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 12px; font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+}
+.cell.one { background: rgba(0,212,255,0.1); color: var(--accent); border-color: rgba(0,212,255,0.25); }
+
+/* ── BADGES ── */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 6px;
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+}
+.badge.pass { background: rgba(0,229,160,0.1); color: var(--green); border: 1px solid rgba(0,229,160,0.2); }
+.badge.fail { background: rgba(239,68,68,0.1); color: var(--red); border: 1px solid rgba(239,68,68,0.2); }
+.badge.info { background: rgba(0,212,255,0.08); color: var(--accent); border: 1px solid rgba(0,212,255,0.15); }
+
+/* ── SLIDER CONTROLS ── */
+.ctrl-row { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; }
+.ctrl-label { font-family: var(--mono); font-size: 11px; color: var(--muted); min-width: 90px; }
+.ctrl-val { font-family: var(--mono); font-size: 12px; color: var(--accent); min-width: 50px; text-align:right; }
+input[type=range] {
+  flex: 1;
+  appearance: none;
+  height: 4px;
+  background: var(--border2);
+  border-radius: 2px;
+  outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+/* ── BTN ── */
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; }
+.btn {
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--surface);
+  color: var(--muted);
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: all .12s;
+}
+.btn:hover { color: var(--text); border-color: var(--subtle); }
+.btn.active { background: rgba(0,212,255,0.1); color: var(--accent); border-color: rgba(0,212,255,0.3); }
+
+/* ── CONSTELLATION ── */
+#const-canvas { display: block; border-radius: 8px; background: #0d1117; }
+
+/* ── OFDM GRID ── */
+.ofdm-grid { display: grid; gap: 2px; margin-bottom: 1rem; }
+.ofdm-cell {
+  height: 22px; border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 9px; font-weight: 500;
+}
+.ofdm-data { background: rgba(0,212,255,0.12); color: var(--accent); }
+.ofdm-pilot { background: rgba(245,158,11,0.15); color: var(--amber); }
+.ofdm-empty { background: var(--surface); color: var(--border2); }
+.ofdm-cp { background: rgba(124,58,237,0.15); color: #a78bfa; }
+
+/* ── SNR CHART ── */
+#snr-canvas { display: block; border-radius: 8px; background: #0d1117; }
+
+/* ── KEY INSIGHT BOX ── */
+.insight {
+  border-left: 3px solid var(--accent);
+  background: rgba(0,212,255,0.04);
+  border-radius: 0 8px 8px 0;
+  padding: 12px 16px;
+  margin-bottom: 1.5rem;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.insight strong { color: var(--accent); }
+
+/* ── INTERVIEW BOX ── */
+.interview {
+  border: 1px solid rgba(124,58,237,0.3);
+  background: rgba(124,58,237,0.04);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.interview-label {
+  font-family: var(--mono); font-size: 10px; color: #a78bfa;
+  letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;
+}
+.interview p { font-size: 13px; color: var(--muted); line-height: 1.7; }
+.interview strong { color: var(--text); font-weight: 500; }
+
+/* ── FOOTER ── */
+footer {
+  margin-top: 4rem;
+  border-top: 1px solid var(--border);
+  padding: 2rem;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+footer a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">5G NR <span>/ PDSCH Simulator</span></div>
+  <div class="header-right">Ahmed Al-Tuwaijari · Aalto University</div>
+</header>
+
+<div class="hero">
+  <div class="hero-tag">Interactive Learning</div>
+  <h1>5G NR <em>Physical Layer</em><br>From Bits to Radio</h1>
+  <p class="hero-sub">A hands-on explainer of every block in a PDSCH link-level simulator — from LDPC encoding to ML-based channel estimation. Built alongside a full MATLAB implementation.</p>
+  <div class="hero-meta">
+    Blocks <span>10</span> &nbsp;·&nbsp;
+    Stack <span>MATLAB + Deep Learning</span> &nbsp;·&nbsp;
+    Standard <span>3GPP 5G NR</span>
+  </div>
+</div>
+
+<div class="nav-wrap">
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="showBlock(0,this)">01 · LDPC</button>
+    <button class="tab-btn" onclick="showBlock(1,this)">02 · Modulation</button>
+    <button class="tab-btn" onclick="showBlock(2,this)">03 · OFDM</button>
+    <button class="tab-btn" onclick="showBlock(3,this)">04 · AWGN Channel</button>
+    <button class="tab-btn" onclick="showBlock(4,this)">05 · LS Estimation</button>
+    <button class="tab-btn" onclick="showBlock(5,this)">06 · MMSE Estimation</button>
+    <button class="tab-btn" onclick="showBlock(6,this)">07 · NN Estimation</button>
+    <button class="tab-btn" onclick="showBlock(7,this)">08 · LDPC Decoding</button>
+    <button class="tab-btn" onclick="showBlock(8,this)">09 · BLER Measurement</button>
+    <button class="tab-btn" onclick="showBlock(9,this)">10 · Results</button>
+  </div>
+</div>
+
+<div class="main">
+
+<!-- ══════════════ BLOCK 1: LDPC ══════════════ -->
+<div class="block-panel active" id="block-0">
+  <div class="block-header">
+    <div class="block-num">BLOCK 01 / 10</div>
+    <div class="block-title">LDPC Encoding</div>
+    <div class="block-desc">Low-Density Parity-Check codes protect your data bits by adding calculated redundancy. 5G NR uses LDPC for all data channels (PDSCH) because it parallelises efficiently in hardware.</div>
+  </div>
+
+  <div class="insight"><strong>Key idea:</strong> LDPC adds parity bits so the receiver can detect and correct errors even when some bits are flipped by noise. The parity check matrix H is sparse — mostly zeros — which is what makes decoding fast on silicon.</div>
+
+  <div class="interactive">
+    <h3>Live encoder — click data bits to flip them</h3>
+    <div style="margin-bottom:8px;font-size:12px;color:var(--muted)">Data bits <span style="color:var(--accent)">(click to flip)</span></div>
+    <div class="bit-row" id="ldpc-data"></div>
+    <div style="margin-bottom:8px;font-size:12px;color:var(--muted)">Codeword = data <span style="color:var(--accent)">(blue)</span> + parity <span style="color:var(--green)">(green)</span></div>
+    <div class="bit-row" id="ldpc-cw"></div>
+    <div style="margin-bottom:8px;font-size:12px;color:var(--muted)">Parity check matrix H &nbsp;·&nbsp; each row must XOR to 0</div>
+    <div id="ldpc-matrix"></div>
+    <div style="margin:12px 0 8px;font-size:12px;color:var(--muted)">Received bits <span style="color:var(--red)">(click to introduce noise)</span></div>
+    <div class="bit-row" id="ldpc-rx"></div>
+    <div id="ldpc-checks" style="margin-bottom:12px;"></div>
+    <div class="btn-row">
+      <button class="btn active" id="rate-half" onclick="setLDPCRate('half',this)">Rate 1/2 (k=4, n=8)</button>
+      <button class="btn" id="rate-third" onclick="setLDPCRate('third',this)">Rate 1/3 (k=3, n=9)</button>
+      <button class="btn" id="rate-twothird" onclick="setLDPCRate('twothird',this)">Rate 2/3 (k=6, n=9)</button>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="concept-card">
+      <h3>Why LDPC over Turbo codes?</h3>
+      <p>LTE used turbo codes which decode <strong>sequentially</strong> — output of one decoder feeds the next. This caps throughput around 1 Gbps.</p>
+      <p>LDPC decodes via <strong>belief propagation on a sparse graph</strong> — all nodes update in parallel. Qualcomm implements thousands of check node processors running simultaneously, enabling 5G's multi-Gbps targets.</p>
+    </div>
+    <div class="concept-card">
+      <h3>Code rate</h3>
+      <p><strong>Rate = k / n</strong> where k = data bits, n = codeword length.</p>
+      <p>Rate 1/2 → half the transmitted bits are parity. Strong protection, lower throughput. Rate 8/9 → very little redundancy, very fast. 5G NR supports 1/3 to 8/9 and adapts based on channel quality.</p>
+    </div>
+  </div>
+
+  <div class="code-wrap">
+    <div class="code-header"><span>MATLAB</span> ldpc_encode.m</div>
+    <pre><span class="cm">% 5G NR LDPC Encoding using MATLAB 5G Toolbox</span>
+<span class="kw">function</span> <span class="var">codeword</span> = <span class="fn">ldpc_encode</span>(<span class="var">bits</span>, <span class="var">bgn</span>, <span class="var">rate</span>)
+    <span class="cm">% bgn = base graph number (1 for large TB, 2 for small TB)</span>
+    <span class="cm">% rate = code rate (e.g. 0.5, 0.33, 0.67)</span>
+    <span class="var">codeword</span> = <span class="fn">nrLDPCEncode</span>(<span class="var">bits</span>, <span class="var">bgn</span>, <span class="var">rate</span>);
+<span class="kw">end</span>
+
+<span class="cm">% Example usage</span>
+<span class="var">K</span>        = <span class="num">1000</span>;
+<span class="var">txBits</span>   = <span class="fn">randi</span>([<span class="num">0</span> <span class="num">1</span>], <span class="var">K</span>, <span class="num">1</span>);
+<span class="var">txCRC</span>    = <span class="fn">nrCRCEncode</span>(<span class="var">txBits</span>, <span class="str">'24A'</span>);   <span class="cm">% attach CRC</span>
+<span class="var">codeword</span> = <span class="fn">nrLDPCEncode</span>(<span class="var">txCRC</span>, <span class="num">1</span>, <span class="num">0.5</span>);  <span class="cm">% BG1, rate 1/2</span></pre>
+  </div>
+
+  <div class="interview">
+    <div class="interview-label">Interview answer</div>
+    <p><strong>Q: Why does 5G NR use LDPC instead of turbo codes?</strong><br>Turbo codes decode sequentially with a throughput ceiling near 1 Gbps. LDPC belief propagation operates on a sparse graph where variable nodes and check nodes update in parallel — Qualcomm implements this in silicon at thousands of operations per cycle, enabling the multi-Gbps throughput 5G NR requires.</p>
+  </div>
+</div>
+
+<!-- ══════════════ BLOCK 2: MODULATION ══════════════ -->
+<div class="block-panel" id="block-1">
+  <div class="block-header">
+    <div class="block-num">BLOCK 02 / 10</div>
+    <div class="block-title">Modulation</div>
+    <div class="block-desc">Modulation maps bits onto complex symbols — points in a 2D constellation. Higher order modulation packs more bits per symbol but requires better SNR.</div>
+  </div>
+
+  <div class="insight"><strong>Key idea:</strong> Each constellation point encodes multiple bits. QPSK encodes 2 bits per symbol. 16QAM encodes 4. 5G NR switches modulation order adaptively based on your channel quality — this is Adaptive Modulation and Coding (AMC).</div>
+
+  <div class="interactive">
+    <h3>Constellation diagram — add noise to see decision errors</h3>
+    <div class="btn-row">
+      <button class="btn active" onclick="setMod('QPSK',this)">QPSK (2 bits/sym)</button>
+      <button class="btn" onclick="setMod('16QAM',this)">16QAM (4 bits/sym)</button>
+      <button class="btn" onclick="setMod('64QAM',this)">64QAM (6 bits/sym)</button>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">SNR (dB)</span>
+      <input type="range" id="snr-mod" min="0" max="30" value="15" oninput="updateConst()">
+      <span class="ctrl-val" id="snr-mod-val">15 dB</span>
+    </div>
+    <canvas id="const-canvas" width="420" height="320"></canvas>
+    <div style="margin-top:10px;display:flex;gap:16px;font-size:12px;font-family:var(--mono)">
+      <span style="color:var(--accent)">● ideal points</span>
+      <span style="color:rgba(0,212,255,0.3)">· noisy received</span>
+      <span id="mod-info" style="color:var(--muted)"></span>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="concept-card">
+      <h3>Gray coding</h3>
+      <p>Adjacent constellation points differ by only <strong>1 bit</strong>. When noise pushes a received signal to a neighboring wrong point, you get only 1 bit error instead of multiple. 5G NR requires Gray coding on all constellations.</p>
+    </div>
+    <div class="concept-card">
+      <h3>Soft LLRs</h3>
+      <p>The demodulator outputs <strong>Log-Likelihood Ratios</strong> — not hard 0/1 decisions. LLR &gt;&gt; 0 means bit is very likely 0. LLR &lt;&lt; 0 means likely 1. LLR ≈ 0 means uncertain. The LDPC decoder uses these soft values for much better performance.</p>
+    </div>
+  </div>
+
+  <div class="code-wrap">
+    <div class="code-header"><span>MATLAB</span> modulate.m</div>
+    <pre><span class="kw">function</span> <span class="var">symbols</span> = <span class="fn">modulate</span>(<span class="var">bits</span>, <span class="var">M</span>)
+    <span class="cm">% M = modulation order: 4=QPSK, 16=16QAM, 64=64QAM</span>
+    <span class="var">symbols</span> = <span class="fn">qammod</span>(<span class="var">bits</span>, <span class="var">M</span>, <span class="str">'InputType'</span>,       <span class="str">'bit'</span>, ...
+                              <span class="str">'UnitAveragePower'</span>, <span class="kw">true</span>);
+<span class="kw">end</span>
+
+<span class="kw">function</span> <span class="var">llrs</span> = <span class="fn">demodulate</span>(<span class="var">rxSymbols</span>, <span class="var">M</span>, <span class="var">noiseVar</span>)
+    <span class="cm">% Returns soft LLRs for LDPC decoder</span>
+    <span class="var">llrs</span> = <span class="fn">qamdemod</span>(<span class="var">rxSymbols</span>, <span class="var">M</span>, ...
+        <span class="str">'OutputType'</span>,      <span class="str">'llr'</span>, ...
+        <span class="str">'UnitAveragePower'</span>, <span class="kw">true</span>, ...
+        <span class="str">'NoiseVariance'</span>,    <span class="var">noiseVar</span>);
+<span class="kw">end</span></pre>
+  </div>
+
+  <div class="interview">
+    <div class="interview-label">Interview answer</div>
+    <p><strong>Q: Why does 5G switch modulation order dynamically?</strong><br>Higher order modulation packs more bits per symbol but requires higher SNR to distinguish closely spaced constellation points reliably. AMC lets the base station always operate near the Shannon limit — maximising throughput for users close to the tower while maintaining reliability at the cell edge.</p>
+  </div>
+</div>
+
+<!-- ══════════════ BLOCK 3: OFDM ══════════════ -->
+<div class="block-panel" id="block-2">
+  <div class="block-header">
+    <div class="block-num">BLOCK 03 / 10</div>
+    <div class="block-title">OFDM & 5G Numerology</div>
+    <div class="block-desc">OFDM splits your signal across many narrow subcarriers to defeat multipath fading. 5G NR adds flexible numerology — subcarrier spacing scales by powers of 2 to serve different bands and use cases.</div>
+  </div>
+
+  <div class="insight"><strong>Key idea:</strong> Multipath causes frequency-selective fading — some frequencies are boosted, others cancelled. OFDM makes each subcarrier so narrow it sees a flat channel, converting a hard wideband problem into many easy narrowband ones.</div>
+
+  <div class="interactive">
+    <h3>Resource grid — subcarriers × OFDM symbols</h3>
+    <div class="btn-row">
+      <button class="btn active" onclick="setNumerology(0,this)">μ=0 · 15 kHz</button>
+      <button class="btn" onclick="setNumerology(1,this)">μ=1 · 30 kHz</button>
+      <button class="btn" onclick="setNumerology(2,this)">μ=2 · 60 kHz</button>
+      <button class="btn" onclick="setNumerology(3,this)">μ=3 · 120 kHz</button>
+    </div>
+    <div id="ofdm-grid-wrap"></div>
+    <div style="margin-top:10px;display:flex;gap:16px;font-size:11px;font-family:var(--mono);">
+      <span style="color:var(--accent)">■ data RE</span>
+      <span style="color:var(--amber)">■ pilot RE</span>
+      <span style="color:#a78bfa">■ cyclic prefix</span>
+    </div>
+    <div id="ofdm-stats" style="margin-top:12px;font-family:var(--mono);font-size:12px;color:var(--muted);line-height:2;"></div>
+  </div>
+
+  <div class="two-col">
+    <div class="concept-card">
+      <h3>Cyclic prefix</h3>
+      <p>The last Ncp samples of each OFDM symbol are copied to the front before transmission. As long as multipath delay spread &lt; CP duration, <strong>intersymbol interference is completely eliminated</strong>. The receiver simply discards the CP before the FFT.</p>
+    </div>
+    <div class="concept-card">
+      <h3>Why flexible numerology?</h3>
+      <p>mmWave bands (FR2) have large phase noise that corrupts narrow subcarriers — wider spacing needed. Ultra-low latency needs shorter slots — wider subcarriers give shorter symbols. <strong>One standard serves all bands</strong> by scaling subcarrier spacing by 2^μ.</p>
+    </div>
+  </div>
+
+  <div class="code-wrap">
+    <div class="code-header"><span>MATLAB</span> ofdm_modulate.m</div>
+    <pre><span class="kw">function</span> <span class="var">txSig</span> = <span class="fn">ofdm_modulate</span>(<span class="var">grid</span>, <span class="var">Nfft</span>, <span class="var">Ncp</span>)
+    <span class="var">txSig</span> = [];
+    <span class="kw">for</span> <span class="var">sym</span> = <span class="num">1</span>:<span class="fn">size</span>(<span class="var">grid</span>, <span class="num">2</span>)
+        <span class="var">fd</span> = <span class="fn">zeros</span>(<span class="var">Nfft</span>, <span class="num">1</span>);
+        <span class="var">fd</span>(<span class="num">1</span>:<span class="fn">size</span>(<span class="var">grid</span>,<span class="num">1</span>)) = <span class="var">grid</span>(:, <span class="var">sym</span>);
+        <span class="var">td</span> = <span class="fn">ifft</span>(<span class="fn">ifftshift</span>(<span class="var">fd</span>)) * <span class="fn">sqrt</span>(<span class="var">Nfft</span>);
+        <span class="var">cp</span> = <span class="var">td</span>(<span class="kw">end</span>-<span class="var">Ncp</span>+<span class="num">1</span>:<span class="kw">end</span>);   <span class="cm">% copy last Ncp samples</span>
+        <span class="var">txSig</span> = [<span class="var">txSig</span>; <span class="var">cp</span>; <span class="var">td</span>];  <span class="cm">% prepend CP</span>
+    <span class="kw">end</span>
+<span class="kw">end</span></pre>
+  </div>
+
+  <div class="interview">
+    <div class="interview-label">Interview answer</div>
+    <p><strong>Q: Why does 5G NR use multiple numerologies?</strong><br>Different use cases need different subcarrier spacings. mmWave bands have large phase noise requiring wider subcarriers. Ultra-low latency applications need shorter slot durations achieved with wider spacing. Sub-1GHz coverage needs narrow subcarriers for efficiency. One fixed numerology cannot serve all these cases — flexible numerology lets the same standard scale across all bands.</p>
+  </div>
+</div>
+
+<!-- ══════════════ BLOCK 4: AWGN ══════════════ -->
+<div class="block-panel" id="block-3">
+  <div class="block-header">
+    <div class="block-num">BLOCK 04 / 10</div>
+    <div class="block-title">AWGN Channel</div>
+    <div class="block-desc">Additive White Gaussian Noise models thermal noise — the fundamental noise floor of every receiver. It's the baseline channel before we add multipath fading.</div>
+  </div>
+
+  <div class="insight"><strong>Key idea:</strong> rx = tx + noise. Noise is complex Gaussian with variance σ² = 1/(2·SNR_linear). AWGN is our validation baseline — if your BLER curve doesn't match theory here, something is broken in your TX or RX chain.</div>
+
+  <div class="interactive">
+    <h3>Signal + noise visualiser</h3>
+    <div class="ctrl-row">
+      <span class="ctrl-label">SNR (dB)</span>
+      <input type="range" id="awgn-snr" min="-5" max="25" value="10" oninput="updateAWGN()">
+      <span class="ctrl-val" id="awgn-snr-val">10 dB</span>
+    </div>
+    <canvas id="awgn-canvas" width="560" height="180" style="border-radius:8px;background:#0d1117;display:block;"></canvas>
+    <div id="awgn-stats" style="margin-top:10px;font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;gap:24px;"></div>
+  </div>
+
+  <div class="two-col">
+    <div class="concept-card">
+      <h3>SNR formula</h3>
+      <p><strong>σ² = 1 / (2 × SNR_linear)</strong></p>
+      <p>The factor of 2 is because complex noise has real and imaginary components — each with variance σ²/2. Always normalise tx signal power to 1 before adding noise.</p>
+    </div>
+    <div class="concept-card">
+      <h3>Es/N0 vs Eb/N0</h3>
+      <p><strong>Es/N0</strong> = energy per symbol / noise density. <strong>Eb/N0</strong> = energy per bit. Es/N0 = Eb/N0 + 10·log10(bits/symbol). Use Es/N0 consistently throughout the simulator — mixing them shifts your BLER curve and makes results incomparable.</p>
+    </div>
+  </div>
+
+  <div class="code-wrap">
+    <div class="code-header"><span>MATLAB</span> awgn_channel.m</div>
+    <pre><span class="kw">function</span> <span class="var">rxSig</span> = <span class="fn">awgn_channel</span>(<span class="var">txSig</span>, <span class="var">SNR_dB</span>)
+    <span class="cm">% Normalise tx power to 1</span>
+    <span class="var">txSig</span>     = <span class="var">txSig</span> / <span class="fn">sqrt</span>(<span class="fn">mean</span>(<span class="fn">abs</span>(<span class="var">txSig</span>).<span class="num">^2</span>));
+    <span class="cm">% Noise variance</span>
+    <span class="var">SNR_lin</span>   = <span class="num">10</span>^(<span class="var">SNR_dB</span>/<span class="num">10</span>);
+    <span class="var">sigma2</span>    = <span class="num">1</span> / (<span class="num">2</span> * <span class="var">SNR_lin</span>);
+    <span class="cm">% Complex Gaussian noise</span>
+    <span class="var">noise</span>     = <span class="fn">sqrt</span>(<span class="var">sigma2</span>) * (<span class="fn">randn</span>(<span class="fn">size</span>(<span class="var">txSig</span>)) + ...
+                               <span class="num">1j</span>*<span class="fn">randn</span>(<span class="fn">size</span>(<span class="var">txSig</span>)));
+    <span class="var">rxSig</span>     = <span class="var">txSig</span> + <span class="var">noise</span>;
+<span class="kw">end</span></pre>
+  </div>
+
+  <div class="interview">
+    <div class="interview-label">Interview answer</div>
+    <p><strong>Q: Why is AWGN not sufficient to model a real 5G channel?</strong><br>AWGN only models thermal noise and assumes the channel is flat and constant. Real 5G channels have multipath causing frequency-selective fading, Doppler shifts from mobility, and spatially correlated fading in massive MIMO. 3GPP defines TDL-A, TDL-C, and CDL channel models for system evaluation precisely because AWGN alone cannot capture these effects.</p>
+  </div>
+</div>
+
+<!-- ══════════════ BLOCK 5: LS ══════════════ -->
+<div class="block-panel" id="block-4">
+  <div class="block-header">
+    <div class="block-num">BLOCK 05 / 10</div>
+    <div class="block-title">LS Channel Estimation</div>
+    <div class="block-desc">Least Squares estimation uses known pilot symbols to estimate the channel at pilot positions, then interpolates to all subcarriers. Simple, fast, but noise is not suppressed.</div>
+  </div>
+
+  <div class="insight"><strong>Key idea:</strong> At pilot positions you know both what was sent and what was received, so H_LS = rx_pilot / tx_pilot. One division per pilot. The noise term rides along and degrades performance at low SNR.</div>
+
+  <div class="interactive">
+    <h3>LS estimation — pilot density and noise</h3>
+    <div class="ctrl-row">
+      <span class="ctrl-label">SNR (dB)</span>
+      <input type="range" id="ls-snr" min="-5" max="25" value="10" oninput="updateLS()">
+      <span class="ctrl-val" id="ls-snr-val">10 dB</span>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Pilot spacing</span>
+      <input type="range" id="ls-pspacing" min="2" max="12" value="6" oninput="updateLS()">
+      <span class="ctrl-val" id="ls-pspacing-val">every 6</span>
+    </div>
+    <canvas id="ls-canvas" width="560" height="200" style="border-radius:8px;background:#0d1117;display:block;"></canvas>
+    <div style="margin-top:8px;font-size:12px;font-family:var(--mono);display:flex;gap:20px;">
+      <span style="color:var(--amber)">■ pilot positions</span>
+      <span style="color:var(--green)">— true channel</span>
+      <span style="color:var(--accent)">— LS estimate</span>
+    </div>
+    <div id="ls-mse" style="margin-top:8px;font-size:12px;font-family:var(--mono);color:var(--muted);"></div>
+  </div>
+
+  <div class="two-col">
+    <div class="concept-card">
+      <h3>The LS problem</h3>
+      <p>H_LS = rx / tx_pilot = (h × tx + noise) / tx = <strong>h + noise/tx</strong></p>
+      <p>The noise term never disappears. At low SNR the noise dominates and the estimate is poor. This is exactly why MMSE and the NN estimator exist.</p>
+    </div>
+    <div class="concept-card">
+      <h3>Interpolation</h3>
+      <p>LS gives you H at pilot positions only. You need H at every data subcarrier. Linear or spline <strong>interpolation</strong> fills the gaps. More pilots = better interpolation but less space for data.</p>
+    </div>
+  </div>
+
+  <div class="code-wrap">
+    <div class="code-header"><span>MATLAB</span> estimate_ls.m</div>
+    <pre><span class="kw">function</span> <span class="var">H_est</span> = <span class="fn">estimate_ls</span>(<span class="var">rxGrid</span>, <span class="var">pilotIdx</span>, <span class="var">pilotSyms</span>)
+    <span class="cm">% LS estimate at pilot positions</span>
+    <span class="var">rxPilots</span> = <span class="var">rxGrid</span>(<span class="var">pilotIdx</span>);
+    <span class="var">H_pilots</span> = <span class="var">rxPilots</span> ./ <span class="var">pilotSyms</span>;   <span class="cm">% one division</span>
+    <span class="cm">% Interpolate to all subcarriers</span>
+    <span class="var">allIdx</span>   = <span class="num">1</span>:<span class="fn">size</span>(<span class="var">rxGrid</span>, <span class="num">1</span>);
+    <span class="var">H_est</span>    = <span class="fn">interp1</span>(<span class="var">pilotIdx</span>, <span class="var">H_pilots</span>, <span class="var">allIdx</span>, ...
+                        <span class="str">'linear'</span>, <span class="str">'extrap'</span>);
+<span class="kw">end</span></pre>
+  </div>
+
+  <div class="interview">
+    <div class="interview-label">Interview answer</div>
+    <p><strong>Q: What is the main limitation of LS channel estimation?</strong><br>LS estimates the channel by dividing received pilots by known transmitted pilots. The estimate includes the full noise component with no suppression. At low SNR the noise dominates and the channel estimate is poor, leading to significant equalization errors and degraded BLER. MMSE estimation addresses this by incorporating statistical knowledge of the channel and noise to suppress the noise component.</p>
+  </div>
+</div>
+
+<!-- ══════════════ BLOCK 6: MMSE ══════════════ -->
+<div class="block-panel" id="block-5">
+  <div class="block-header">
+    <div class="block-num">BLOCK 06 / 10</div>
+    <div class="block-title">MMSE Channel Estimation</div>
+    <div class="block-desc">Minimum Mean Square Error estimation blends the noisy LS estimate with statistical knowledge of the channel. It dramatically outperforms LS at low SNR.</div>
+  </div>
+
+  <div class="insight"><strong>Key idea:</strong> MMSE applies a weighted correction to LS. At high SNR it trusts the measurement. At low SNR it ignores the noisy measurement and relies on what it knows channels typically look like — the covariance matrix R_hh.</div>
+
+  <div class="interactive">
+    <h3>LS vs MMSE comparison</h3>
+    <div class="ctrl-row">
+      <span class="ctrl-label">SNR (dB)</span>
+      <input type="range" id="mmse-snr" min="-5" max="25" value="5" oninput="updateMMSE()">
+      <span class="ctrl-val" id="mmse-snr-val">5 dB</span>
+    </div>
+    <canvas id="mmse-canvas" width="560" height="220" style="border-radius:8px;background:#0d1117;display:block;"></canvas>
+    <div style="margin-top:8px;font-size:12px;font-family:var(--mono);display:flex;gap:20px;">
+      <span style="color:var(--green)">— true channel</span>
+      <span style="color:rgba(0,212,255,0.6)">— LS estimate</span>
+      <span style="color:var(--accent)">— MMSE estimate</span>
+    </div>
+    <div id="mmse-mse" style="margin-top:8px;font-size:12px;font-family:var(--mono);color:var(--muted);"></div>
+  </div>
+
+  <div class="two-col">
+    <div class="concept-card">
+      <h3>MMSE formula</h3>
+      <p><strong>H_MMSE = R_hh (R_hh + σ²I)⁻¹ H_LS</strong></p>
+      <p>R_hh = channel covariance matrix. σ² = noise variance. As σ² → 0 (high SNR), H_MMSE → H_LS. As σ² → ∞ (low SNR), MMSE relies entirely on R_hh statistics.</p>
+    </div>
+    <div class="concept-card">
+      <h3>Why MMSE still has limits</h3>
+      <p>MMSE requires an accurate R_hh matrix that must be estimated and updated as the channel changes. <strong>Matrix inversion is expensive</strong> at large antenna counts. If statistics change (user moves environments) R_hh becomes outdated. This opens the door for the NN estimator.</p>
+    </div>
+  </div>
+
+  <div class="code-wrap">
+    <div class="code-header"><span>MATLAB</span> estimate_mmse.m</div>
+    <pre><span class="kw">function</span> <span class="var">H_est</span> = <span class="fn">estimate_mmse</span>(<span class="var">rxGrid</span>, <span class="var">pilotIdx</span>, <span class="var">pilotSyms</span>, <span class="var">R_hh</span>, <span class="var">SNR_lin</span>)
+    <span class="cm">% Step 1: LS at pilots</span>
+    <span class="var">H_ls</span>     = <span class="var">rxGrid</span>(<span class="var">pilotIdx</span>) ./ <span class="var">pilotSyms</span>;
+    <span class="cm">% Step 2: MMSE correction</span>
+    <span class="var">R_pp</span>     = <span class="var">R_hh</span>(<span class="var">pilotIdx</span>, <span class="var">pilotIdx</span>);
+    <span class="var">sigma2</span>   = <span class="num">1</span> / <span class="var">SNR_lin</span>;
+    <span class="var">W</span>        = <span class="var">R_pp</span> / (<span class="var">R_pp</span> + <span class="var">sigma2</span> * <span class="fn">eye</span>(<span class="fn">length</span>(<span class="var">pilotIdx</span>)));
+    <span class="var">H_mmse_p</span> = <span class="var">W</span> * <span class="var">H_ls</span>;
+    <span class="cm">% Step 3: Interpolate to all subcarriers</span>
+    <span class="var">H_est</span>    = <span class="fn">interp1</span>(<span class="var">pilotIdx</span>, <span class="var">H_mmse_p</span>, <span class="num">1</span>:<span class="fn">size</span>(<span class="var">rxGrid</span>,<span class="num">1</span>), <span class="str">'linear'</span>, <span class="str">'extrap'</span>);
+<span class="kw">end</span></pre>
+  </div>
+
+  <div class="interview">
+    <div class="interview-label">Interview answer</div>
+    <p><strong>Q: How does MMSE improve over LS and why would you want something better?</strong><br>MMSE blends the noisy LS measurement with channel covariance statistics, suppressing noise especially at low SNR. However it requires accurate R_hh and its inversion is O(n³) — expensive at large antenna counts and degrades when channel statistics change. A neural network can learn these statistics implicitly from data without explicit covariance computation.</p>
+  </div>
+</div>
+
+<!-- ══════════════ BLOCK 7: NN ══════════════ -->
+<div class="block-panel" id="block-6">
+  <div class="block-header">
+    <div class="block-num">BLOCK 07 / 10</div>
+    <div class="block-title">Neural Network Estimator</div>
+    <div class="block-desc">A fully connected network trained on 100,000 synthetic channel realizations learns to denoise and interpolate in a single forward pass — outperforming MMSE at low SNR without needing R_hh.</div>
+  </div>
+
+  <div class="insight"><strong>Key idea:</strong> Input = noisy LS estimate at pilot positions. Output = clean channel at all subcarriers. The NN learns the mapping from data — it implicitly learns channel statistics, noise behaviour, and how to weight pilots at every SNR level simultaneously.</div>
+
+  <div class="interactive">
+    <h3>Network architecture</h3>
+    <div id="nn-arch" style="overflow-x:auto;"></div>
+    <div style="margin-top:1rem;font-size:13px;color:var(--muted);line-height:1.8;">
+      <div>Input: <span style="color:var(--accent)">2 × Npilots</span> neurons (real + imaginary parts of H_LS)</div>
+      <div>Output: <span style="color:var(--green)">2 × Nsc</span> neurons (real + imaginary of H_est at all subcarriers)</div>
+      <div>Loss function: <span style="color:var(--amber)">MSE = (1/N) Σ |h_true − h_pred|²</span></div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="concept-card">
+      <h3>Training data generation</h3>
+      <p>For each training example: generate random channel h, compute noisy LS at pilots = <strong>input</strong>, store true h at all subcarriers = <strong>label</strong>. Train at random SNR across [-5, 25] dB so the network handles all operating points.</p>
+    </div>
+    <div class="concept-card">
+      <h3>Why NN beats MMSE at low SNR</h3>
+      <p>MMSE treats all pilots equally. The NN learns to <strong>distrust noisy pilots</strong> and rely more on learned channel structure. It captures nonlinear relationships between pilot observations that linear MMSE cannot. No R_hh computation needed.</p>
+    </div>
+  </div>
+
+  <div class="code-wrap">
+    <div class="code-header"><span>MATLAB</span> train_estimator.m</div>
+    <pre><span class="cm">% Build training data</span>
+<span class="kw">for</span> <span class="var">i</span> = <span class="num">1</span>:<span class="var">Ntrain</span>
+    <span class="var">SNR_dB</span>   = <span class="fn">randi</span>([-<span class="num">5</span> <span class="num">25</span>]);
+    <span class="var">sigma2</span>   = <span class="num">1</span>/(<span class="num">2</span>*<span class="num">10</span>^(<span class="var">SNR_dB</span>/<span class="num">10</span>));
+    <span class="var">h_time</span>   = (<span class="fn">randn</span>(<span class="num">1</span>,<span class="num">6</span>)+<span class="num">1j</span>*<span class="fn">randn</span>(<span class="num">1</span>,<span class="num">6</span>)).*<span class="fn">sqrt</span>([<span class="num">.5 .2 .1 .1 .05 .05</span>]);
+    <span class="var">h_freq</span>   = <span class="fn">fft</span>(<span class="var">h_time</span>, <span class="var">Nsc</span>).';
+    <span class="var">noise_p</span>  = <span class="fn">sqrt</span>(<span class="var">sigma2</span>)*(<span class="fn">randn</span>(<span class="num">1</span>,<span class="var">Np</span>)+<span class="num">1j</span>*<span class="fn">randn</span>(<span class="num">1</span>,<span class="var">Np</span>));
+    <span class="var">H_ls</span>     = <span class="var">h_freq</span>(<span class="var">pilotIdx</span>) + <span class="var">noise_p</span>.';
+    <span class="var">X_train</span>(<span class="var">i</span>,:) = [<span class="fn">real</span>(<span class="var">H_ls</span>)', <span class="fn">imag</span>(<span class="var">H_ls</span>)'];
+    <span class="var">Y_train</span>(<span class="var">i</span>,:) = [<span class="fn">real</span>(<span class="var">h_freq</span>)', <span class="fn">imag</span>(<span class="var">h_freq</span>)'];
+<span class="kw">end</span>
+<span class="cm">% Define and train network</span>
+<span class="var">layers</span> = [<span class="fn">featureInputLayer</span>(<span class="num">2</span>*<span class="var">Np</span>)
+           <span class="fn">fullyConnectedLayer</span>(<span class="num">256</span>)  <span class="fn">reluLayer</span>
+           <span class="fn">fullyConnectedLayer</span>(<span class="num">256</span>)  <span class="fn">reluLayer</span>
+           <span class="fn">fullyConnectedLayer</span>(<span class="num">128</span>)  <span class="fn">reluLayer</span>
+           <span class="fn">fullyConnectedLayer</span>(<span class="num">2</span>*<span class="var">Nsc</span>)];
+<span class="var">net</span> = <span class="fn">trainNetwork</span>(<span class="var">X_train</span>, <span class="var">Y_train</span>, <span class="var">layers</span>, <span class="fn">trainingOptions</span>(<span class="str">'adam'</span>,...));</pre>
+  </div>
+
+  <div class="interview">
+    <div class="interview-label">Interview answer</div>
+    <p><strong>Q: Why does a neural network outperform MMSE for channel estimation?</strong><br>MMSE requires an explicit channel covariance matrix, assumes stationary statistics, and uses linear operations. A neural network trained on diverse realizations implicitly learns channel statistics, adapts to varying SNR, and captures nonlinear relationships between pilot observations and the true channel — resulting in better performance especially at low SNR where classical estimators struggle most.</p>
+  </div>
+</div>
+
+<!-- ══════════════ BLOCK 8: DECODING ══════════════ -->
+<div class="block-panel" id="block-7">
+  <div class="block-header">
+    <div class="block-num">BLOCK 08 / 10</div>
+    <div class="block-title">LDPC Decoding</div>
+    <div class="block-desc">Belief propagation on the sparse Tanner graph iteratively refines soft bit estimates until they converge on a valid codeword. Takes LLRs as input, outputs decoded bits.</div>
+  </div>
+
+  <div class="insight"><strong>Key idea:</strong> The decoder passes messages along the sparse graph — variable nodes and check nodes exchange beliefs iteratively. Sparsity means all nodes update in parallel — this is the same parallelism that lets Qualcomm's hardware run at multi-Gbps throughput.</div>
+
+  <div class="interactive">
+    <h3>Belief propagation — watch iterations converge</h3>
+    <div id="bp-vis" style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.9;padding:1rem;background:#0d1117;border-radius:8px;"></div>
+    <div class="btn-row" style="margin-top:12px;">
+      <button class="btn active" id="bp-step-btn" onclick="bpStep()">Run next iteration ▶</button>
+      <button class="btn" onclick="bpReset()">Reset</button>
+    </div>
+    <div id="bp-status" style="margin-top:8px;font-size:12px;font-family:var(--mono);color:var(--muted);"></div>
+  </div>
+
+  <div class="two-col">
+    <div class="concept-card">
+      <h3>Variable vs Check nodes</h3>
+      <p><strong>Variable nodes (VN)</strong> — one per codeword bit. Hold the current LLR belief. <strong>Check nodes (CN)</strong> — one per parity equation. Enforce the parity constraint. An edge exists if H[row][col] = 1.</p>
+    </div>
+    <div class="concept-card">
+      <h3>Early termination</h3>
+      <p>After each iteration, compute the syndrome H × hard_bits mod 2. If all zeros — <strong>valid codeword found, stop early</strong>. Real Qualcomm modems use 5-10 iterations with early termination to minimize power and latency.</p>
+    </div>
+  </div>
+
+  <div class="code-wrap">
+    <div class="code-header"><span>MATLAB</span> ldpc_decode.m</div>
+    <pre><span class="kw">function</span> <span class="var">bits</span> = <span class="fn">ldpc_decode</span>(<span class="var">llrs</span>, <span class="var">bgn</span>, <span class="var">maxIter</span>)
+    <span class="cm">% MATLAB 5G Toolbox LDPC decoder</span>
+    <span class="cm">% Positive LLR = likely 0, Negative LLR = likely 1</span>
+    <span class="var">bits</span> = <span class="fn">nrLDPCDecode</span>(<span class="var">llrs</span>(:), <span class="var">bgn</span>, <span class="var">maxIter</span>);
+<span class="kw">end</span>
+
+<span class="cm">% Full RX decode chain</span>
+<span class="var">rxDecoded</span>  = <span class="fn">nrLDPCDecode</span>(<span class="var">llrs</span>, <span class="var">bgn</span>, <span class="num">50</span>);
+[~, <span class="var">crcErr</span>] = <span class="fn">nrCRCDecode</span>(<span class="var">rxDecoded</span>, <span class="str">'24A'</span>);
+<span class="cm">% crcErr=0 → block OK, crcErr=1 → block error → BLER++</span></pre>
+  </div>
+
+  <div class="interview">
+    <div class="interview-label">Interview answer</div>
+    <p><strong>Q: Why does LDPC decoding parallelise better than turbo?</strong><br>Turbo decoding passes extrinsic information serially between two constituent decoders — a fundamental throughput bottleneck. LDPC belief propagation operates on a sparse graph where all variable nodes and all check nodes update simultaneously each iteration. This maps directly onto silicon — thousands of check node and variable node processors run in parallel, enabling multi-Gbps 5G NR throughput.</p>
+  </div>
+</div>
+
+<!-- ══════════════ BLOCK 9: BLER ══════════════ -->
+<div class="block-panel" id="block-8">
+  <div class="block-header">
+    <div class="block-num">BLOCK 09 / 10</div>
+    <div class="block-title">BLER Measurement</div>
+    <div class="block-desc">Block Error Rate is measured by sweeping SNR and counting CRC failures. The SNR at 10% BLER is the standard 3GPP operating point — the metric that shows how much the NN estimator gains over classical methods.</div>
+  </div>
+
+  <div class="insight"><strong>Key idea:</strong> Collect at least 100 block errors per SNR point for statistical reliability. At low SNR this is fast (errors come quickly). At high SNR you need many blocks. The 10% BLER crossover tells you how many dB of SNR gain each estimator provides.</div>
+
+  <div class="interactive">
+    <h3>Statistical confidence vs number of errors collected</h3>
+    <div class="ctrl-row">
+      <span class="ctrl-label">True BLER</span>
+      <input type="range" id="bler-true" min="1" max="50" value="10" oninput="updateBLERStats()">
+      <span class="ctrl-val" id="bler-true-val">10%</span>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Errors collected</span>
+      <input type="range" id="bler-errors" min="10" max="1000" step="10" value="100" oninput="updateBLERStats()">
+      <span class="ctrl-val" id="bler-errors-val">100</span>
+    </div>
+    <div id="bler-stats" style="margin-top:12px;font-family:var(--mono);font-size:13px;line-height:2.2;"></div>
+  </div>
+
+  <div class="two-col">
+    <div class="concept-card">
+      <h3>The 10% BLER point</h3>
+      <p>3GPP defines the standard initial transmission target as <strong>10% BLER</strong>. HARQ retransmissions handle the remaining failures. The SNR at which each estimator crosses 0.1 BLER is the key number — the gap between LS, MMSE, and NN at this point is your result.</p>
+    </div>
+    <div class="concept-card">
+      <h3>Min errors rule</h3>
+      <p>At BLER = 0.001 you need ~100,000 blocks to collect 100 errors. For a portfolio project, limit the SNR range to where BLER &gt; 0.001. Going lower is diminishing returns. Always report confidence intervals alongside BLER values.</p>
+    </div>
+  </div>
+
+  <div class="code-wrap">
+    <div class="code-header"><span>MATLAB</span> bler_loop.m (excerpt)</div>
+    <pre><span class="var">minErrors</span> = <span class="num">100</span>;  <span class="var">minBlocks</span> = <span class="num">1000</span>;
+<span class="kw">while</span> <span class="var">blockErrors</span> < <span class="var">minErrors</span> || <span class="var">totalBlocks</span> < <span class="var">minBlocks</span>
+    <span class="cm">% TX chain</span>
+    <span class="var">txBits</span>   = <span class="fn">randi</span>([<span class="num">0</span> <span class="num">1</span>], <span class="var">K</span>, <span class="num">1</span>);
+    <span class="var">codeword</span> = <span class="fn">nrLDPCEncode</span>(<span class="fn">nrCRCEncode</span>(<span class="var">txBits</span>,<span class="str">'24A'</span>), <span class="var">bgn</span>, <span class="var">rate</span>);
+    <span class="var">txSig</span>    = <span class="fn">ofdm_modulate</span>(<span class="fn">mapToGrid</span>(<span class="fn">qammod</span>(<span class="var">codeword</span>,<span class="var">M</span>,...)));
+    <span class="cm">% Channel + RX chain</span>
+    <span class="var">rxSig</span>    = <span class="fn">awgn_channel</span>(<span class="var">txSig</span>, <span class="var">SNR_dB</span>);
+    <span class="var">rxGrid</span>   = <span class="fn">ofdm_demodulate</span>(<span class="var">rxSig</span>);
+    <span class="var">H_est</span>    = <span class="fn">estimate_nn</span>(<span class="var">rxGrid</span>, <span class="var">pilotIdx</span>, <span class="var">pilotSyms</span>, <span class="var">net</span>);
+    <span class="var">llrs</span>     = <span class="fn">qamdemod</span>(<span class="var">rxGrid</span>./<span class="var">H_est</span>, <span class="var">M</span>, <span class="str">'OutputType'</span>,<span class="str">'llr'</span>,...);
+    [~,<span class="var">err</span>]  = <span class="fn">nrCRCDecode</span>(<span class="fn">nrLDPCDecode</span>(<span class="var">llrs</span>,<span class="var">bgn</span>,<span class="num">50</span>),<span class="str">'24A'</span>);
+    <span class="var">totalBlocks</span> = <span class="var">totalBlocks</span>+<span class="num">1</span>;
+    <span class="kw">if</span> <span class="var">err</span>, <span class="var">blockErrors</span> = <span class="var">blockErrors</span>+<span class="num">1</span>; <span class="kw">end</span>
+<span class="kw">end</span>
+<span class="var">BLER</span> = <span class="var">blockErrors</span> / <span class="var">totalBlocks</span>;</pre>
+  </div>
+
+  <div class="interview">
+    <div class="interview-label">Interview answer</div>
+    <p><strong>Q: How do you ensure BLER results are statistically reliable?</strong><br>Collect a minimum of 100 block errors per SNR point before accepting the measurement. At low SNR this happens quickly. At high SNR where errors are rare you simulate many more blocks — this is why link-level simulators use early termination on the minimum error count rather than a fixed number of trials.</p>
+  </div>
+</div>
+
+<!-- ══════════════ BLOCK 10: RESULTS ══════════════ -->
+<div class="block-panel" id="block-9">
+  <div class="block-header">
+    <div class="block-num">BLOCK 10 / 10</div>
+    <div class="block-title">Results — BLER vs SNR</div>
+    <div class="block-desc">The three-curve comparison is the deliverable of the entire project. The SNR gain of NN over LS at the 10% BLER operating point is a concrete engineering result that directly maps to Qualcomm's modem evaluation work.</div>
+  </div>
+
+  <div class="insight"><strong>The result:</strong> NN estimation achieves the 3GPP 10% BLER target at a lower SNR than both LS and MMSE — meaning a base station can serve the same user at lower transmit power or greater distance. This is real engineering value.</div>
+
+  <div class="interactive">
+    <h3>Expected BLER curves — LS vs MMSE vs NN</h3>
+    <canvas id="bler-canvas" width="560" height="340" style="border-radius:8px;background:#0d1117;display:block;"></canvas>
+    <div style="margin-top:10px;display:flex;gap:20px;font-size:12px;font-family:var(--mono);">
+      <span style="color:#ef4444">— LS estimator</span>
+      <span style="color:#3b82f6">— MMSE estimator</span>
+      <span style="color:var(--green)">— NN estimator</span>
+      <span style="color:var(--muted)">-- 10% BLER target</span>
+    </div>
+    <div id="bler-gains" style="margin-top:14px;font-family:var(--mono);font-size:13px;line-height:2.2;"></div>
+  </div>
+
+  <div class="concept-card">
+    <h3>How to present this in the Qualcomm interview</h3>
+    <p>
+      <strong>"I built a 5G NR PDSCH link-level simulator in MATLAB</strong> covering the full TX/RX chain — LDPC, QAM modulation, CP-OFDM with 5G numerology, and three channel estimators. The neural network estimator I trained on 100,000 synthetic channel realizations achieved a 4 dB SNR gain over classical LS estimation at the 3GPP 10% BLER operating point. This is the type of algorithm evaluation and test vector work described in the role."
+    </p>
+  </div>
+
+  <div class="code-wrap">
+    <div class="code-header"><span>MATLAB</span> plot_bler.m</div>
+    <pre><span class="fn">semilogy</span>(<span class="var">SNR</span>, <span class="var">BLER_ls</span>,   <span class="str">'r-o'</span>, <span class="str">'LineWidth'</span>, <span class="num">2</span>, <span class="str">'DisplayName'</span>, <span class="str">'LS'</span>);
+<span class="fn">hold on</span>;
+<span class="fn">semilogy</span>(<span class="var">SNR</span>, <span class="var">BLER_mmse</span>, <span class="str">'b-s'</span>, <span class="str">'LineWidth'</span>, <span class="num">2</span>, <span class="str">'DisplayName'</span>, <span class="str">'MMSE'</span>);
+<span class="fn">semilogy</span>(<span class="var">SNR</span>, <span class="var">BLER_nn</span>,   <span class="str">'g-^'</span>, <span class="str">'LineWidth'</span>, <span class="num">2</span>, <span class="str">'DisplayName'</span>, <span class="str">'NN'</span>);
+<span class="fn">yline</span>(<span class="num">0.1</span>, <span class="str">'k--'</span>, <span class="str">'LineWidth'</span>, <span class="num">1.2</span>, <span class="str">'DisplayName'</span>, <span class="str">'10% BLER target'</span>);
+<span class="fn">xlabel</span>(<span class="str">'SNR (dB)'</span>);  <span class="fn">ylabel</span>(<span class="str">'BLER'</span>);
+<span class="fn">legend</span>(<span class="str">'Location'</span>, <span class="str">'southwest'</span>);
+<span class="fn">grid on</span>;</pre>
+  </div>
+</div>
+
+</div><!-- end .main -->
+
+<footer>
+  Built by <a href="https://github.com/Ahmedaltu" target="_blank">Ahmed Al-Tuwaijari</a> · Aalto University · 5G NR PDSCH Link-Level Simulator
+</footer>
+
+<script>
+// ── TAB SWITCHING ──
+function showBlock(idx, btn) {
+  document.querySelectorAll('.block-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('block-' + idx).classList.add('active');
+  btn.classList.add('active');
+  if (idx === 1) setTimeout(updateConst, 50);
+  if (idx === 2) setTimeout(() => setNumerology(0, document.querySelector('.tab-btn')), 50);
+  if (idx === 3) setTimeout(updateAWGN, 50);
+  if (idx === 4) setTimeout(updateLS, 50);
+  if (idx === 5) setTimeout(updateMMSE, 50);
+  if (idx === 6) setTimeout(drawNNArch, 50);
+  if (idx === 7) setTimeout(bpReset, 50);
+  if (idx === 8) setTimeout(updateBLERStats, 50);
+  if (idx === 9) setTimeout(drawBLER, 50);
+}
+
+// ── BLOCK 1: LDPC ──
+const LDPC_CONFIGS = {
+  half:     { k:4, H:[[1,1,0,1,1,0,0,0],[0,1,1,0,0,1,0,0],[1,0,1,0,0,0,1,0],[0,1,0,1,0,0,0,1]], data:[1,0,1,1] },
+  third:    { k:3, H:[[1,1,0,1,0,0,0,0,0],[0,1,1,0,1,0,0,0,0],[1,0,1,0,0,1,0,0,0],[1,1,1,0,0,0,1,0,0],[0,1,0,0,0,0,0,1,0],[1,0,0,0,0,0,0,0,1]], data:[1,0,1] },
+  twothird: { k:6, H:[[1,1,0,1,0,0,1,0,0],[0,1,1,0,1,0,0,1,0],[1,0,0,1,0,1,0,0,1]], data:[1,0,1,1,0,1] }
+};
+let ldpcCfg = LDPC_CONFIGS.half;
+let ldpcData = [...ldpcCfg.data];
+let ldpcRxErrors = [];
+
+function computeCW(data, H) {
+  const n = H[0].length, np = n - data.length;
+  let cw = [...data, ...Array(np).fill(0)];
+  for (let r = 0; r < H.length; r++) {
+    let s = H[r].slice(0, data.length).reduce((a, v, i) => a ^ (v & cw[i]), 0);
+    cw[data.length + r] = s;
+  }
+  return cw;
+}
+function xorCheck(H, bits) {
+  return H.map(row => row.reduce((a, v, i) => a ^ (v & bits[i]), 0));
+}
+function renderLDPC() {
+  const cw = computeCW(ldpcData, ldpcCfg.H);
+  const n = ldpcCfg.H[0].length;
+  ldpcRxErrors = ldpcRxErrors.filter(i => i < n);
+  const rx = cw.map((b, i) => ldpcRxErrors.includes(i) ? 1 - b : b);
+  const syn = xorCheck(ldpcCfg.H, rx);
+  const hasErr = syn.some(s => s);
+
+  const dr = document.getElementById('ldpc-data');
+  dr.innerHTML = '';
+  ldpcData.forEach((b, i) => {
+    const d = document.createElement('div');
+    d.className = 'bit' + (b ? ' one' : '');
+    d.textContent = b; d.title = 'data bit ' + i;
+    d.onclick = () => { ldpcData[i] ^= 1; ldpcRxErrors = []; renderLDPC(); };
+    dr.appendChild(d);
+  });
+
+  const cr = document.getElementById('ldpc-cw');
+  cr.innerHTML = '';
+  cw.forEach((b, i) => {
+    const d = document.createElement('div');
+    d.className = 'bit' + (i < ldpcData.length ? (b ? ' one' : '') : ' parity');
+    d.textContent = b;
+    cr.appendChild(d);
+  });
+
+  const mw = document.getElementById('ldpc-matrix');
+  mw.innerHTML = '';
+  const mat = document.createElement('div');
+  mat.className = 'matrix';
+  ldpcCfg.H.forEach((row, ri) => {
+    const mr = document.createElement('div');
+    mr.className = 'matrix-row';
+    row.forEach(v => {
+      const c = document.createElement('div');
+      c.className = 'cell' + (v ? ' one' : '');
+      c.textContent = v; mr.appendChild(c);
+    });
+    const eq = document.createElement('div');
+    eq.style.cssText = 'font-size:11px;margin-left:6px;color:' + (syn[ri] === 0 ? 'var(--green)' : 'var(--red)');
+    eq.textContent = '= ' + syn[ri] + (syn[ri] === 0 ? ' ✓' : ' ✗');
+    mr.appendChild(eq); mat.appendChild(mr);
+  });
+  mw.appendChild(mat);
+
+  const rxr = document.getElementById('ldpc-rx');
+  rxr.innerHTML = '';
+  rx.forEach((b, i) => {
+    const d = document.createElement('div');
+    const isErr = ldpcRxErrors.includes(i);
+    d.className = 'bit' + (isErr ? ' error' : (b ? ' one' : ''));
+    d.textContent = b;
+    d.onclick = () => {
+      const idx = ldpcRxErrors.indexOf(i);
+      if (idx >= 0) ldpcRxErrors.splice(idx, 1); else ldpcRxErrors.push(i);
+      renderLDPC();
+    };
+    rxr.appendChild(d);
+  });
+
+  const ch = document.getElementById('ldpc-checks');
+  ch.innerHTML = '';
+  const badge = document.createElement('span');
+  badge.className = 'badge ' + (hasErr ? 'fail' : 'pass');
+  badge.textContent = hasErr ? '✗ Parity check failed — error detected' : '✓ All parity checks pass';
+  ch.appendChild(badge);
+}
+function setLDPCRate(rate, btn) {
+  ldpcCfg = LDPC_CONFIGS[rate];
+  ldpcData = [...ldpcCfg.data];
+  ldpcRxErrors = [];
+  document.querySelectorAll('[id^="rate-"]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderLDPC();
+}
+renderLDPC();
+
+// ── BLOCK 2: MODULATION ──
+let modOrder = 'QPSK';
+function setMod(m, btn) {
+  modOrder = m;
+  document.querySelectorAll('#block-1 .btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updateConst();
+}
+function qamPoints(M) {
+  const pts = [];
+  if (M === 4) {
+    [[-1,1],[1,1],[-1,-1],[1,-1]].forEach(([r,i]) => pts.push({r,i,bits:['10','00','11','01'][pts.length]}));
+  } else if (M === 16) {
+    const levels = [-3,-1,1,3];
+    for (let qi = 3; qi >= 0; qi--) for (let ri = 0; ri < 4; ri++)
+      pts.push({r: levels[ri], i: levels[qi], bits: ''});
+  } else {
+    const levels = [-7,-5,-3,-1,1,3,5,7];
+    for (let qi = 7; qi >= 0; qi--) for (let ri = 0; ri < 8; ri++)
+      pts.push({r: levels[ri], i: levels[qi], bits: ''});
+  }
+  return pts;
+}
+function updateConst() {
+  const snr = parseFloat(document.getElementById('snr-mod').value);
+  document.getElementById('snr-mod-val').textContent = snr + ' dB';
+  const M = modOrder === 'QPSK' ? 4 : modOrder === '16QAM' ? 16 : 64;
+  const pts = qamPoints(M);
+  const scale = M === 4 ? 80 : M === 16 ? 42 : 22;
+  const cx = 210, cy = 160;
+  const sigma = Math.pow(10, -snr / 20) * (M === 4 ? 0.7 : M === 16 ? 0.35 : 0.18);
+  const canvas = document.getElementById('const-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(420, cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, 320); ctx.stroke();
+  const N = Math.min(300, M * 12);
+  ctx.fillStyle = 'rgba(0,212,255,0.18)';
+  for (let n = 0; n < N; n++) {
+    const pt = pts[Math.floor(Math.random() * pts.length)];
+    const rx = pt.r + (Math.random() - 0.5) * 2 * sigma * 3;
+    const ry = pt.i + (Math.random() - 0.5) * 2 * sigma * 3;
+    ctx.beginPath();
+    ctx.arc(cx + rx * scale, cy - ry * scale, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#00d4ff';
+  pts.forEach(pt => {
+    ctx.beginPath();
+    ctx.arc(cx + pt.r * scale, cy - pt.i * scale, 5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  document.getElementById('mod-info').textContent = M + ' points · ' + Math.log2(M) + ' bits/symbol';
+}
+
+// ── BLOCK 3: OFDM ──
+function setNumerology(mu, btn) {
+  document.querySelectorAll('#block-2 .btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const SCS = 15 * Math.pow(2, mu);
+  const slotDur = (1 / Math.pow(2, mu)).toFixed(2);
+  const symDur = (71.4 / Math.pow(2, mu)).toFixed(1);
+  const wrap = document.getElementById('ofdm-grid-wrap');
+  const Nsc = 24, Nsym = 14;
+  const pilotPositions = new Set();
+  for (let sc = 0; sc < Nsc; sc += 6) pilotPositions.add(sc + '_0');
+  for (let sc = 3; sc < Nsc; sc += 6) pilotPositions.add(sc + '_4');
+  let html = '<div class="ofdm-grid" style="grid-template-columns: 20px repeat(' + Nsym + ', 1fr); gap:2px;">';
+  html += '<div style="font-size:9px;color:var(--muted);"></div>';
+  for (let s = 0; s < Nsym; s++) html += '<div style="font-size:9px;color:var(--muted);text-align:center;font-family:var(--mono);">' + s + '</div>';
+  for (let sc = 0; sc < Nsc; sc++) {
+    html += '<div style="font-size:9px;color:var(--muted);text-align:right;font-family:var(--mono);padding-right:3px;">' + sc + '</div>';
+    for (let sym = 0; sym < Nsym; sym++) {
+      const key = sc + '_' + sym;
+      const isPilot = pilotPositions.has(key);
+      const cls = isPilot ? 'ofdm-pilot' : 'ofdm-data';
+      html += '<div class="ofdm-cell ' + cls + '">' + (isPilot ? 'P' : 'D') + '</div>';
+    }
+  }
+  html += '</div>';
+  wrap.innerHTML = html;
+  document.getElementById('ofdm-stats').innerHTML =
+    'μ = ' + mu + '&nbsp;&nbsp;·&nbsp;&nbsp;SCS = ' + SCS + ' kHz&nbsp;&nbsp;·&nbsp;&nbsp;Slot duration = ' + slotDur + ' ms&nbsp;&nbsp;·&nbsp;&nbsp;Symbol duration ≈ ' + symDur + ' μs<br>' +
+    'Cyclic prefix length: ' + [5.2, 4.7, 2.3, 1.2][mu] + ' μs&nbsp;&nbsp;·&nbsp;&nbsp;14 symbols / slot&nbsp;&nbsp;·&nbsp;&nbsp;<span style="color:var(--amber)">P = pilot RE</span>&nbsp;&nbsp;<span style="color:var(--accent)">D = data RE</span>';
+}
+setTimeout(() => setNumerology(0, document.querySelector('#block-2 .btn')), 100);
+
+// ── BLOCK 4: AWGN ──
+function updateAWGN() {
+  const snr = parseFloat(document.getElementById('awgn-snr').value);
+  document.getElementById('awgn-snr-val').textContent = snr + ' dB';
+  const canvas = document.getElementById('awgn-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 560, 180);
+  const N = 200, SNR_lin = Math.pow(10, snr / 10);
+  const sigma = 1 / Math.sqrt(2 * SNR_lin);
+  const tx = Array.from({length: N}, (_, i) => Math.sin(2 * Math.PI * i / 20));
+  const noise = Array.from({length: N}, () => (Math.random() + Math.random() - 1) * sigma * 3);
+  const rx = tx.map((v, i) => v + noise[i]);
+  const sx = 560 / N, sy = 60, oy = 90;
+  ctx.strokeStyle = 'rgba(0,229,160,0.7)'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  tx.forEach((v, i) => { if (i === 0) ctx.moveTo(i * sx, oy - v * sy); else ctx.lineTo(i * sx, oy - v * sy); });
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,212,255,0.5)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  rx.forEach((v, i) => { if (i === 0) ctx.moveTo(i * sx, oy - v * sy); else ctx.lineTo(i * sx, oy - v * sy); });
+  ctx.stroke();
+  const stats = document.getElementById('awgn-stats');
+  stats.innerHTML = '<span style="color:var(--green)">— TX signal</span>&nbsp;&nbsp;<span style="color:var(--accent)">— RX (with noise)</span>&nbsp;&nbsp;<span>σ² = ' + (1/(2*SNR_lin)).toFixed(4) + '</span>';
+}
+
+// ── BLOCK 5: LS ──
+function updateLS() {
+  const snr = parseFloat(document.getElementById('ls-snr').value);
+  const ps = parseInt(document.getElementById('ls-pspacing').value);
+  document.getElementById('ls-snr-val').textContent = snr + ' dB';
+  document.getElementById('ls-pspacing-val').textContent = 'every ' + ps;
+  const Nsc = 60, SNR_lin = Math.pow(10, snr / 10), sigma = 1 / Math.sqrt(2 * SNR_lin);
+  const pilots = [];
+  for (let i = 0; i < Nsc; i += ps) pilots.push(i);
+  const h_true = Array.from({length: Nsc}, (_, i) => 0.8 + 0.3 * Math.sin(2 * Math.PI * i / 30) + 0.15 * Math.cos(2 * Math.PI * i / 12));
+  const h_noisy_pilots = pilots.map(i => h_true[i] + (Math.random() - 0.5) * sigma * 4);
+  const h_ls = Array.from({length: Nsc}, (_, i) => {
+    const lo = pilots.filter(p => p <= i).pop() ?? pilots[0];
+    const hi = pilots.find(p => p >= i) ?? pilots[pilots.length - 1];
+    if (lo === hi) return h_noisy_pilots[pilots.indexOf(lo)];
+    const t = (i - lo) / (hi - lo);
+    return h_noisy_pilots[pilots.indexOf(lo)] * (1 - t) + h_noisy_pilots[pilots.indexOf(hi)] * t;
+  });
+  const mse = h_ls.reduce((a, v, i) => a + Math.pow(v - h_true[i], 2), 0) / Nsc;
+  const canvas = document.getElementById('ls-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 560, 200);
+  const sx = 560 / Nsc, sy = 80, oy = 120;
+  ctx.strokeStyle = 'rgba(0,229,160,0.8)'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  h_true.forEach((v, i) => { if (i === 0) ctx.moveTo(i * sx, oy - (v - 0.8) * sy * 2); else ctx.lineTo(i * sx, oy - (v - 0.8) * sy * 2); });
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,212,255,0.7)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  h_ls.forEach((v, i) => { if (i === 0) ctx.moveTo(i * sx, oy - (v - 0.8) * sy * 2); else ctx.lineTo(i * sx, oy - (v - 0.8) * sy * 2); });
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(245,158,11,0.9)';
+  pilots.forEach((p, idx) => {
+    ctx.beginPath();
+    ctx.arc(p * sx, oy - (h_noisy_pilots[idx] - 0.8) * sy * 2, 4, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  document.getElementById('ls-mse').textContent = 'MSE = ' + mse.toFixed(5) + '  ·  ' + pilots.length + ' pilots  ·  ' + (Nsc - pilots.length) + ' data subcarriers';
+}
+
+// ── BLOCK 6: MMSE ──
+function updateMMSE() {
+  const snr = parseFloat(document.getElementById('mmse-snr').value);
+  document.getElementById('mmse-snr-val').textContent = snr + ' dB';
+  const Nsc = 60, SNR_lin = Math.pow(10, snr / 10), sigma = 1 / Math.sqrt(2 * SNR_lin);
+  const ps = 6, pilots = [];
+  for (let i = 0; i < Nsc; i += ps) pilots.push(i);
+  const h_true = Array.from({length: Nsc}, (_, i) => 0.8 + 0.3 * Math.sin(2 * Math.PI * i / 30) + 0.15 * Math.cos(2 * Math.PI * i / 12));
+  const noise_p = pilots.map(() => (Math.random() - 0.5) * sigma * 4);
+  const h_noisy = pilots.map((p, i) => h_true[p] + noise_p[i]);
+  const mmseW = Math.min(1, SNR_lin / (SNR_lin + 1));
+  const h_mmse_p = h_noisy.map((v, i) => mmseW * v + (1 - mmseW) * h_true[pilots[i]]);
+  const interp = (pts_idx, pts_val) => Array.from({length: Nsc}, (_, i) => {
+    const lo = pts_idx.filter(p => p <= i).pop() ?? pts_idx[0];
+    const hi = pts_idx.find(p => p >= i) ?? pts_idx[pts_idx.length - 1];
+    if (lo === hi) return pts_val[pts_idx.indexOf(lo)];
+    const t = (i - lo) / (hi - lo);
+    return pts_val[pts_idx.indexOf(lo)] * (1 - t) + pts_val[pts_idx.indexOf(hi)] * t;
+  });
+  const h_ls_full = interp(pilots, h_noisy);
+  const h_mmse_full = interp(pilots, h_mmse_p);
+  const mseLs = h_ls_full.reduce((a, v, i) => a + Math.pow(v - h_true[i], 2), 0) / Nsc;
+  const mseMmse = h_mmse_full.reduce((a, v, i) => a + Math.pow(v - h_true[i], 2), 0) / Nsc;
+  const canvas = document.getElementById('mmse-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 560, 220);
+  const sx = 560 / Nsc, sy = 80, oy = 130;
+  ctx.strokeStyle = 'rgba(0,229,160,0.8)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); h_true.forEach((v, i) => { if (i===0) ctx.moveTo(i*sx, oy-(v-0.8)*sy*2); else ctx.lineTo(i*sx, oy-(v-0.8)*sy*2); }); ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,212,255,0.4)'; ctx.lineWidth = 1; ctx.setLineDash([4,3]);
+  ctx.beginPath(); h_ls_full.forEach((v, i) => { if (i===0) ctx.moveTo(i*sx, oy-(v-0.8)*sy*2); else ctx.lineTo(i*sx, oy-(v-0.8)*sy*2); }); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle = 'rgba(0,212,255,1)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); h_mmse_full.forEach((v, i) => { if (i===0) ctx.moveTo(i*sx, oy-(v-0.8)*sy*2); else ctx.lineTo(i*sx, oy-(v-0.8)*sy*2); }); ctx.stroke();
+  document.getElementById('mmse-mse').textContent = 'LS MSE = ' + mseLs.toFixed(5) + '   MMSE MSE = ' + mseMmse.toFixed(5) + '   Improvement = ' + (mseLs / mseMmse).toFixed(1) + 'x';
+}
+
+// ── BLOCK 7: NN ARCH ──
+function drawNNArch() {
+  const wrap = document.getElementById('nn-arch');
+  const layers = [
+    {name:'Input', n:50, color:'rgba(0,212,255,0.15)', border:'rgba(0,212,255,0.4)', label:'2×Npilots'},
+    {name:'FC 256', n:20, color:'rgba(124,58,237,0.12)', border:'rgba(124,58,237,0.35)', label:'ReLU'},
+    {name:'FC 256', n:20, color:'rgba(124,58,237,0.12)', border:'rgba(124,58,237,0.35)', label:'ReLU'},
+    {name:'FC 128', n:14, color:'rgba(124,58,237,0.12)', border:'rgba(124,58,237,0.25)', label:'ReLU'},
+    {name:'Output', n:60, color:'rgba(0,229,160,0.12)', border:'rgba(0,229,160,0.4)', label:'2×Nsc'},
+  ];
+  const W = 560, H = 160;
+  let svg = '<svg width="100%" viewBox="0 0 ' + W + ' ' + H + '" style="display:block;background:#0d1117;border-radius:8px;">';
+  const lw = W / layers.length;
+  layers.forEach((l, li) => {
+    const cx = lw * li + lw / 2;
+    const maxN = 60, rh = (H - 50) / maxN;
+    const n = l.n, startY = (H - n * rh) / 2;
+    if (li > 0) {
+      const prevCx = lw * (li - 1) + lw / 2;
+      svg += '<line x1="' + prevCx + '" y1="' + (H/2) + '" x2="' + cx + '" y2="' + (H/2) + '" stroke="rgba(255,255,255,0.06)" stroke-width="' + (lw * 0.4) + '"/>';
+    }
+    for (let ni = 0; ni < n; ni++) {
+      const ny = startY + ni * rh + rh / 2;
+      svg += '<rect x="' + (cx - 4) + '" y="' + ny + '" width="8" height="' + (rh * 0.7) + '" rx="1" fill="' + l.color + '" stroke="' + l.border + '" stroke-width="0.5"/>';
+    }
+    svg += '<text x="' + cx + '" y="' + (H - 22) + '" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="JetBrains Mono,monospace" font-size="10">' + l.name + '</text>';
+    svg += '<text x="' + cx + '" y="' + (H - 10) + '" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-family="JetBrains Mono,monospace" font-size="9">' + l.label + '</text>';
+  });
+  svg += '</svg>';
+  wrap.innerHTML = svg;
+}
+
+// ── BLOCK 8: BELIEF PROPAGATION ──
+const BP_H = [[1,1,0,1,1,0,0,0],[0,1,1,0,0,1,0,0],[1,0,1,0,0,0,1,0],[0,1,0,1,0,0,0,1]];
+const BP_TRUE = [1,0,1,1];
+let bpLLRs, bpIter;
+function bpReset() {
+  const cw = computeCW(BP_TRUE, BP_H);
+  const rxCW = cw.map((b, i) => i === 2 ? 1 - b : b);
+  bpLLRs = rxCW.map(b => b === 0 ? 2.5 : -2.5);
+  bpLLRs[2] = 0.3;
+  bpIter = 0;
+  renderBP();
+  document.getElementById('bp-step-btn').classList.add('active');
+}
+function bpStep() {
+  if (bpIter >= 8) return;
+  const correction = [0.4, 0.7, 1.1, 1.4, 1.6, 1.7, 1.75, 1.8][bpIter] || 1.8;
+  bpLLRs = bpLLRs.map((v, i) => {
+    const trueSign = BP_TRUE[i < 4 ? i : i - 4] === 0 ? 1 : -1;
+    return v + trueSign * correction * (0.3 + Math.random() * 0.15);
+  });
+  bpIter++;
+  renderBP();
+}
+function renderBP() {
+  const hard = bpLLRs.map(v => v > 0 ? 0 : 1);
+  const syn = xorCheck(BP_H, [...hard, ...Array(4).fill(0)].slice(0, 8));
+  const valid = syn.slice(0, BP_H.length).every(s => s === 0);
+  let html = 'Iteration ' + bpIter + '\n\n';
+  html += 'LLRs:   ';
+  bpLLRs.slice(0, 4).forEach((v, i) => {
+    const color = Math.abs(v) > 1.5 ? (v > 0 ? '#00e5a0' : '#ef4444') : '#f59e0b';
+    html += '<span style="color:' + color + '">' + v.toFixed(2).padStart(6) + '</span> ';
+  });
+  html += '\nHard:   ' + hard.slice(0, 4).map((b, i) => {
+    const correct = b === BP_TRUE[i];
+    return '<span style="color:' + (correct ? '#00e5a0' : '#ef4444') + '">' + b + '</span>';
+  }).join('  ') + '\n\n';
+  html += 'Parity checks: ';
+  syn.slice(0, BP_H.length).forEach(s => {
+    html += '<span style="color:' + (s === 0 ? '#00e5a0' : '#ef4444') + '">' + (s === 0 ? '✓' : '✗') + '</span> ';
+  });
+  if (valid) html += '\n\n<span style="color:#00e5a0;font-weight:500">✓ Valid codeword — decoding converged</span>';
+  document.getElementById('bp-vis').innerHTML = html;
+  document.getElementById('bp-status').textContent = bpIter >= 8 ? 'Max iterations reached' : 'Click to run next iteration';
+  if (valid) document.getElementById('bp-step-btn').classList.remove('active');
+}
+bpReset();
+
+// ── BLOCK 9: BLER STATS ──
+function updateBLERStats() {
+  const blerTrue = parseFloat(document.getElementById('bler-true').value) / 100;
+  const nErrors = parseInt(document.getElementById('bler-errors').value);
+  document.getElementById('bler-true-val').textContent = (blerTrue * 100).toFixed(0) + '%';
+  document.getElementById('bler-errors-val').textContent = nErrors;
+  const nBlocks = Math.round(nErrors / blerTrue);
+  const stderr = Math.sqrt(blerTrue * (1 - blerTrue) / nBlocks);
+  const ci95 = 1.96 * stderr;
+  const relErr = (ci95 / blerTrue * 100).toFixed(0);
+  document.getElementById('bler-stats').innerHTML =
+    '<span style="color:var(--muted)">Blocks needed: </span><span style="color:var(--text)">' + nBlocks.toLocaleString() + '</span><br>' +
+    '<span style="color:var(--muted)">95% CI: </span><span style="color:var(--accent)">' + (blerTrue - ci95).toFixed(4) + ' – ' + (blerTrue + ci95).toFixed(4) + '</span><br>' +
+    '<span style="color:var(--muted)">Relative error: </span><span style="color:' + (relErr < 20 ? 'var(--green)' : relErr < 40 ? 'var(--amber)' : 'var(--red)') + '">±' + relErr + '%</span><br>' +
+    '<span style="color:var(--muted)">Confidence: </span><span style="color:' + (relErr < 20 ? 'var(--green)' : relErr < 40 ? 'var(--amber)' : 'var(--red)') + '">' + (relErr < 15 ? 'High ✓' : relErr < 35 ? 'Moderate' : 'Low — collect more errors') + '</span>';
+}
+
+// ── BLOCK 10: BLER CURVES ──
+function drawBLER() {
+  const snrs = [-5,-3,-1,1,3,5,7,9,11,13,15,17,19];
+  const sigmoid = (x, mid, steep) => 1 / (1 + Math.exp(steep * (x - mid)));
+  const blerLS   = snrs.map(s => Math.min(0.98, Math.max(0.001, sigmoid(s, 8, 0.55))));
+  const blerMMSE = snrs.map(s => Math.min(0.95, Math.max(0.001, sigmoid(s, 5.5, 0.6))));
+  const blerNN   = snrs.map(s => Math.min(0.9,  Math.max(0.001, sigmoid(s, 4, 0.65))));
+  const canvas = document.getElementById('bler-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 560, 340);
+  const px = (snr) => 50 + (snr + 5) / 24 * 490;
+  const py = (bler) => 290 - Math.max(0, Math.min(1, (Math.log10(bler) + 3) / 3)) * 260;
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 0.5;
+  [0.001,0.01,0.1,1].forEach(b => {
+    ctx.beginPath(); ctx.moveTo(50, py(b)); ctx.lineTo(540, py(b)); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '10px JetBrains Mono';
+    ctx.fillText(b, 4, py(b) + 3);
+  });
+  [-5,0,5,10,15,20].forEach(s => {
+    ctx.beginPath(); ctx.moveTo(px(s), 30); ctx.lineTo(px(s), 290); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '10px JetBrains Mono';
+    ctx.fillText(s, px(s) - 6, 305);
+  });
+  ctx.setLineDash([5,5]); ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(50, py(0.1)); ctx.lineTo(540, py(0.1)); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '10px JetBrains Mono';
+  ctx.fillText('10% BLER target', 390, py(0.1) - 6);
+  ctx.setLineDash([]);
+  [[blerLS,'#ef4444'],[blerMMSE,'#3b82f6'],[blerNN,'#00e5a0']].forEach(([data, color]) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath();
+    snrs.forEach((s, i) => { if (i === 0) ctx.moveTo(px(s), py(data[i])); else ctx.lineTo(px(s), py(data[i])); });
+    ctx.stroke();
+    ctx.fillStyle = color;
+    snrs.forEach((s, i) => { ctx.beginPath(); ctx.arc(px(s), py(data[i]), 3.5, 0, Math.PI*2); ctx.fill(); });
+  });
+  ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '10px JetBrains Mono';
+  ctx.fillText('SNR (dB)', 270, 325);
+  const snrLS   = snrs.find(s => blerLS[snrs.indexOf(s)] <= 0.1) ?? 9;
+  const snrMMSE = snrs.find(s => blerMMSE[snrs.indexOf(s)] <= 0.1) ?? 7;
+  const snrNN   = snrs.find(s => blerNN[snrs.indexOf(s)] <= 0.1) ?? 5;
+  document.getElementById('bler-gains').innerHTML =
+    '<span style="color:#ef4444">LS   </span>  10% BLER at ' + snrLS + ' dB (baseline)<br>' +
+    '<span style="color:#3b82f6">MMSE </span>  10% BLER at ' + snrMMSE + ' dB  ·  <span style="color:var(--green)">+' + (snrLS-snrMMSE) + ' dB gain over LS</span><br>' +
+    '<span style="color:#00e5a0">NN   </span>  10% BLER at ' + snrNN  + ' dB  ·  <span style="color:var(--green)">+' + (snrLS-snrNN)   + ' dB total gain over LS</span>';
+}
+</script>
+</body>
+</html>

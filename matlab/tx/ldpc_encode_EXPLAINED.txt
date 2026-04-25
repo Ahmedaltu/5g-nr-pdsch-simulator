@@ -1,0 +1,108 @@
+================================================================================
+FILE: tx/ldpc_encode.m
+BLOCK: 01 — LDPC Encoding
+================================================================================
+
+WHAT THIS FILE DOES
+-------------------
+Takes your raw information bits and adds controlled redundancy (parity bits)
+so the receiver can detect and correct errors introduced by the wireless channel.
+
+This is the first step in the transmitter chain:
+
+  [random bits] --> [CRC attach] --> [LDPC encode] --> [modulate] --> [OFDM] --> air
+
+WHY CHANNEL CODING EXISTS
+--------------------------
+When bits travel over a wireless channel, noise flips some of them. Without
+protection, a single flipped bit corrupts your data with no way to recover it.
+
+Channel coding adds extra bits calculated from your data. The receiver uses
+these extra bits to find and fix errors — even if several bits were flipped.
+
+Think of it like this: instead of sending "1011", you send "1011 + 12 extra
+bits derived from 1011". The receiver uses the extra bits to reconstruct the
+original even if some arrived corrupted.
+
+HOW LDPC WORKS
+--------------
+LDPC uses a parity check matrix H. Your encoded codeword c must satisfy:
+
+    H * c = 0  (mod 2)
+
+This means every row of H, when XORed with the codeword bits it connects to,
+must equal zero. The parity bits are chosen to make this true.
+
+The matrix H is SPARSE — mostly zeros, with only a few 1s per row. This
+sparsity is what makes LDPC decoding fast:
+- Each bit only participates in a few parity equations
+- Those equations can be checked and updated independently and in parallel
+- Qualcomm implements this parallelism directly in silicon
+
+CODE RATE
+---------
+Rate = k / n
+
+  k = number of information bits (what you actually want to send)
+  n = codeword length (information bits + parity bits)
+
+  Rate 1/2:  n = 2k   (half the transmitted bits are parity)  -- strong protection
+  Rate 2/3:  n = 1.5k (one third are parity)                  -- moderate protection
+  Rate 8/9:  n ≈ 1.1k (very little parity)                    -- fast but fragile
+
+5G NR supports rates from 1/3 to 8/9 and adapts based on channel conditions.
+When you are close to the base station (good SNR), higher rates are used.
+At the cell edge (poor SNR), lower rates provide stronger protection.
+
+BASE GRAPHS
+-----------
+5G NR defines two LDPC base graphs (BG1 and BG2):
+
+  BG1: designed for large transport blocks (up to 8448 bits)
+       and high code rates (1/3 to 8/9)
+       Used for most PDSCH transmissions
+
+  BG2: designed for small transport blocks (up to 3840 bits)
+       and low code rates (1/5 to 2/3)
+       Used for small payloads and control information
+
+The base graph defines the structure of H. MATLAB's nrLDPCEncode
+selects the correct lifting size automatically based on block length.
+
+WHY LDPC OVER TURBO CODES (LTE used turbo codes)
+-------------------------------------------------
+Turbo codes:
+  - Decode using two constituent decoders that pass information SEQUENTIALLY
+  - Each decoder must wait for the other to finish
+  - This creates a fundamental throughput ceiling around 1 Gbps
+
+LDPC codes:
+  - Decode using belief propagation on a SPARSE GRAPH
+  - Variable nodes and check nodes all update SIMULTANEOUSLY
+  - Parallelism scales with silicon — more transistors = more throughput
+  - Qualcomm implements this in the modem SoC at 10+ Gbps
+
+This is the exact reason 3GPP chose LDPC for 5G NR data channels.
+
+MATLAB FUNCTION USED
+--------------------
+  nrLDPCEncode(bits, bgn, rate)
+  From: MATLAB 5G Toolbox (3GPP TS 38.212 compliant)
+
+  Input:  column vector of bits (after CRC attachment)
+  Output: encoded codeword column vector
+
+PARAMETERS IN THIS PROJECT
+---------------------------
+  bgn  = 1      (BG1, appropriate for our 1000-bit transport blocks)
+  rate = 0.5    (rate 1/2, good balance of protection vs throughput)
+
+POSITION IN THE TX CHAIN
+-------------------------
+  1. randi([0 1], K, 1)     -- generate K random information bits
+  2. nrCRCEncode(bits,'24A') -- attach 24-bit CRC for error detection
+  3. ldpc_encode(crc, 1, 0.5) <-- THIS FILE
+  4. modulate.m             -- map bits to QAM symbols
+  5. ofdm_modulate.m        -- convert symbols to time-domain signal
+
+================================================================================

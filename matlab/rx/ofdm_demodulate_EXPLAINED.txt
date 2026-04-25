@@ -1,0 +1,147 @@
+================================================================================
+FILE: rx/ofdm_demodulate.m
+BLOCK: 03 (RX side) — OFDM Demodulation
+================================================================================
+
+WHAT THIS FILE DOES
+-------------------
+Converts the received time-domain signal back into a 2D resource grid
+of frequency-domain symbols. This is the first step of the receiver chain.
+
+Position in the RX chain:
+  received signal --> ofdm_demodulate <-- THIS FILE --> channel estimation --> equalize --> decode
+
+THE TX/RX SYMMETRY
+------------------
+Everything this function does is the exact reverse of ofdm_modulate.m:
+
+  TRANSMITTER:                      RECEIVER:
+  QAM symbols (frequency domain)    grid (frequency domain)
+       |                                 ^
+       v                                 |
+  ifftshift + IFFT                  FFT + fftshift
+       |                                 ^
+       v                                 |
+  Add cyclic prefix                 Remove cyclic prefix
+       |                                 ^
+       v                                 |
+  txSignal (time domain)  ------>  rxSignal (time domain)
+
+STEP BY STEP
+------------
+
+STEP 1 — SKIP THE CYCLIC PREFIX
+  The transmitter prepended Ncp samples to each OFDM symbol.
+  These samples protected against multipath interference during
+  transmission, but now we don't need them anymore — discard them.
+
+  Before:  [ CP (Ncp samples) | OFDM symbol (Nfft samples) ]
+  After:   we only keep -----> [ OFDM symbol (Nfft samples) ]
+
+  Why can we just throw away the CP?
+  Because the CP absorbed all the multipath interference.
+  The OFDM symbol samples that follow the CP are clean — no ISI.
+  (As long as the multipath delay < CP duration, which 5G NR ensures
+  by design for typical urban environments.)
+
+STEP 2 — EXTRACT Nfft SAMPLES
+  After skipping the CP, take exactly Nfft samples.
+  These are the useful OFDM symbol samples.
+
+STEP 3 — FFT
+  The IFFT at the transmitter synthesised the multicarrier signal.
+  The FFT here analyses it — extracts the value at each subcarrier.
+
+  Mathematically:
+    TX: x[n] = IFFT{ X[k] }     (frequency to time)
+    RX: Y[k] = FFT{ y[n] }      (time to frequency)
+
+  If there were no channel or noise:
+    Y[k] = X[k]    (perfect recovery)
+
+  With channel h[k] and noise n[k]:
+    Y[k] = H[k] * X[k] + N[k]
+
+  So each subcarrier's received value = channel * sent symbol + noise.
+  This is why we need channel estimation next.
+
+  Divide by sqrt(Nfft) to reverse the TX power normalisation.
+
+STEP 4 — FFTSHIFT
+  The transmitter used ifftshift to centre the DC subcarrier.
+  fftshift here reverses this, restoring the correct subcarrier order.
+
+  Without fftshift, subcarrier 0 would appear at position Nfft/2
+  instead of the centre, and all your pilot positions would be wrong.
+
+STEP 5 — ADVANCE POINTER
+  Move the sample pointer forward by Nfft to be ready for the next symbol.
+  The pointer now points to the start of the next symbol's CP.
+
+WHAT THE OUTPUT CONTAINS
+-------------------------
+The output grid is a complex matrix [Nfft x Nsymbols] where:
+
+  grid(k, sym) = H(k) * X(k, sym) + N(k, sym)
+
+  H(k)       = complex channel coefficient at subcarrier k
+  X(k, sym)  = transmitted QAM symbol at subcarrier k, symbol sym
+  N(k, sym)  = complex noise sample at subcarrier k, symbol sym
+
+At pilot positions: X is known (we put known pilot symbols there)
+At data positions:  X is unknown (this is what we want to recover)
+
+The channel estimation step uses the pilot positions to estimate H(k),
+and then the equalizer uses H(k) to recover X(k) at data positions.
+
+WHAT CHANNEL ESTIMATION SEES
+------------------------------
+At a pilot subcarrier k_p where we sent known symbol P:
+
+  grid(k_p, sym) = H(k_p) * P + N(k_p, sym)
+
+Since we know P, we can estimate H(k_p):
+  H_est(k_p) = grid(k_p, sym) / P = H(k_p) + N(k_p)/P
+
+This is exactly what estimate_ls.m does.
+
+SAMPLE POINTER ARITHMETIC
+--------------------------
+For a slot with 14 symbols and parameters Nfft=512, Ncp=36:
+
+  Symbol 1 occupies samples:  1 to 548        (36 CP + 512 data)
+  Symbol 2 occupies samples:  549 to 1096
+  ...
+  Symbol 14 occupies samples: 7125 to 7672
+
+  Total samples per slot = 14 * (512 + 36) = 7672
+
+  The pointer moves like this per iteration:
+    sampleIdx starts at 1
+    +36  (skip CP)  --> now at 37
+    read 512 samples (37 to 548)
+    +512 (advance)  --> now at 549 (start of next symbol's CP)
+
+MATLAB FUNCTIONS USED
+----------------------
+  fft(x)     -- Fast Fourier Transform
+  fftshift(X) -- Rearrange FFT output so DC is at centre
+
+PARAMETERS IN THIS PROJECT
+---------------------------
+  Nfft     = 512   (FFT size for 30 kHz SCS)
+  Ncp      = 36    (normal cyclic prefix at mu=1)
+  Nsymbols = 14    (one full 5G NR slot)
+
+POSITION IN THE RX CHAIN
+-------------------------
+  1. ofdm_demodulate(rxSignal, Nfft, Ncp, Nsymbols)  <-- THIS FILE
+  2. estimate_ls.m    -- LS channel estimation at pilots
+     estimate_mmse.m  -- MMSE channel estimation
+     estimate_nn.m    -- NN channel estimation
+  3. equalize_zf.m   -- divide received symbols by H_est
+  4. demodulate.m    -- QAM demodulation --> soft LLRs
+  5. ldpc_decode.m   -- LDPC decoding --> decoded bits
+  6. nrCRCDecode     -- CRC check --> block error count
+
+================================================================================

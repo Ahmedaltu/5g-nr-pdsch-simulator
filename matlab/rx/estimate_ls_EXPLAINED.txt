@@ -1,0 +1,152 @@
+================================================================================
+FILE: rx/estimate_ls.m
+BLOCK: 05 — LS Channel Estimation
+================================================================================
+
+WHAT THIS FILE DOES
+-------------------
+Estimates the wireless channel H at every subcarrier using known pilot symbols.
+This is the simplest channel estimator — fast, but noise is not suppressed.
+
+Position in the RX chain:
+  ofdm_demodulate --> estimate_ls <-- THIS FILE --> equalize --> demodulate --> decode
+
+WHY WE NEED CHANNEL ESTIMATION
+--------------------------------
+In a fading wireless channel, the received signal is:
+
+  rx(k) = H(k) * tx(k) + noise(k)
+
+Where H(k) is a complex number at each subcarrier k that represents:
+  - Amplitude change: |H(k)| -- the channel attenuates or amplifies
+  - Phase rotation:  angle(H(k)) -- the channel rotates the constellation
+
+To recover the transmitted symbol tx(k), we need to EQUALISE:
+
+  tx_recovered(k) = rx(k) / H(k) = tx(k) + noise(k)/H(k)
+
+But we don't know H(k). Channel estimation figures it out.
+
+HOW WE ESTIMATE H: PILOT SYMBOLS
+----------------------------------
+The transmitter inserts KNOWN symbols at agreed subcarrier positions.
+These are called pilots (or reference signals — DMRS in 5G NR terminology).
+
+At a pilot subcarrier k_p:
+  - tx(k_p) = pilot_value  (known to both TX and RX)
+  - rx(k_p) = H(k_p) * pilot_value + noise(k_p)
+
+Since we know pilot_value and we observe rx(k_p), we can solve for H:
+
+  H_LS(k_p) = rx(k_p) / pilot_value
+             = H(k_p) + noise(k_p) / pilot_value
+
+This is the LS estimate. It's the true channel plus a noise term.
+
+THE LEAST SQUARES DERIVATION
+------------------------------
+"Least Squares" means we find H that minimises the squared error:
+
+  H_LS = argmin_H |rx - H * pilot|^2
+
+Taking the derivative and setting to zero:
+  d/dH |rx - H*pilot|^2 = 0
+  -2 * pilot* * (rx - H*pilot) = 0
+  H_LS = rx / pilot          (element-wise for each pilot)
+
+This is exactly the division we perform. For a single pilot:
+  H_LS = rx_pilot / tx_pilot
+
+For multiple pilots simultaneously (matrix form):
+  H_LS = (X^H * X)^-1 * X^H * y
+  where X = diagonal matrix of pilot symbols
+  Since X is diagonal, this simplifies to element-wise division.
+
+THE NOISE PROBLEM
+-----------------
+The LS estimate always contains a noise term:
+
+  H_LS(k_p) = H_true(k_p) + noise(k_p) / pilot_value
+
+At HIGH SNR:  noise is small --> H_LS ≈ H_true  (good estimate)
+At LOW SNR:   noise is large --> H_LS is dominated by noise (bad estimate)
+
+This is the fundamental limitation of LS. It cannot distinguish between
+the true channel variation and noise fluctuations. At -5 dB SNR, your
+channel estimate is mostly noise and equalization will fail badly.
+
+INTERPOLATION: FROM PILOTS TO ALL SUBCARRIERS
+-----------------------------------------------
+Pilots are placed at every Nth subcarrier (pilot spacing).
+In our simulator: every 12th subcarrier (one pilot per resource block).
+
+After LS estimation we have H at:
+  [k1, k2, k3, ...]  (pilot positions only)
+
+We need H at:
+  [1, 2, 3, 4, ..., Nsc]  (all subcarrier positions)
+
+Linear interpolation fills in the gaps by drawing straight lines
+between adjacent pilot estimates:
+
+  Pilots:       H_p1          H_p2          H_p3
+                 |              |              |
+  Interpolated: ─●──────────────●──────────────●─
+                k1    k1+4    k2    k2+4    k3
+
+This works well when the channel varies slowly across frequency
+(i.e. the coherence bandwidth >> pilot spacing). If the channel
+changes rapidly between pilots, interpolation error increases.
+
+PILOT DESIGN IN 5G NR
+-----------------------
+5G NR uses DMRS (Demodulation Reference Signal) for channel estimation.
+DMRS patterns are defined in 3GPP TS 38.211.
+
+Key design choices:
+  - Pilot density: more pilots = better estimation, less data throughput
+  - Pilot positions: designed to cover the coherence bandwidth
+  - Pilot values: designed for good autocorrelation properties
+  - Power: pilots can be boosted for better SNR at pilot positions
+
+In our simulator we use simplified pilots:
+  - All pilot values = +1 (unit power BPSK)
+  - Pilot spacing = 12 subcarriers (one per resource block)
+  - Pilots in first OFDM symbol only (one symbol used for estimation)
+
+WHY LS IS STILL USEFUL
+------------------------
+Despite its noise limitation, LS is:
+  - Computationally trivial (one division per pilot)
+  - No prior knowledge needed (no channel statistics required)
+  - The starting point for MMSE and NN estimators
+    (both use LS estimate as their INPUT)
+  - The baseline for comparing other estimators
+
+In the BLER plot, the LS curve is the worst performer — this is expected
+and is the correct baseline. The gap between LS and NN is your result.
+
+MATLAB FUNCTIONS USED
+----------------------
+  interp1(x, v, xq, 'linear', 'extrap')
+    x   = known x positions (pilot indices)
+    v   = known values (H_LS at pilots)
+    xq  = query positions (all subcarrier indices)
+    Result: interpolated H_est at all subcarriers
+
+PARAMETERS IN THIS PROJECT
+---------------------------
+  pilotIdx     = 1:12:Nsc     (every 12th subcarrier, 0-indexed)
+  pilotSymbols = ones(Np, 1)  (all pilots = +1)
+  Interpolation: linear with extrapolation at edges
+
+POSITION IN THE RX CHAIN
+-------------------------
+  1. ofdm_demodulate.m          -- get received resource grid
+  2. estimate_ls(rxGrid, ...)   <-- THIS FILE -- get H_est at all subcarriers
+  3. equalize_zf.m              -- rxGrid / H_est
+  4. demodulate.m               -- QAM demod --> LLRs
+  5. ldpc_decode.m              -- LLRs --> bits
+  6. nrCRCDecode                -- check if block is correct
+
+================================================================================

@@ -1,0 +1,156 @@
+================================================================================
+FILE: rx/equalize_zf.m
+BLOCK: 05 (continued) — Zero-Forcing Equalization
+================================================================================
+
+WHAT THIS FILE DOES
+-------------------
+Removes the channel effect from the received symbols so the QAM demodulator
+can make correct bit decisions. Uses the channel estimate from estimate_ls/mmse/nn.
+
+WHY EQUALIZATION IS NEEDED
+----------------------------
+After OFDM demodulation, each subcarrier contains:
+
+  rx(k) = H(k) * tx(k) + noise(k)
+
+H(k) is a complex number that:
+  - Scales the amplitude: |H(k)| might be 0.3 (signal attenuated to 30%)
+  - Rotates the phase: angle(H(k)) might be 45° (constellation rotated)
+
+Without equalization, the QAM demodulator sees a rotated, scaled
+constellation and makes wrong decisions — even with zero noise.
+
+ZERO-FORCING EQUALIZATION
+--------------------------
+Divide by the channel estimate:
+
+  tx_est(k) = rx(k) / H_est(k)
+            = H(k)/H_est(k) * tx(k) + noise(k)/H_est(k)
+            ≈ tx(k) + noise(k)/H(k)   (if H_est ≈ H_true)
+
+This "forces" the channel to 1 (flat frequency response).
+The name "zero-forcing" comes from forcing the ISI (inter-symbol
+interference) to zero — a concept from equalizer theory.
+
+THE NOISE ENHANCEMENT PROBLEM
+-------------------------------
+When a subcarrier is in a deep fade: |H(k)| is very small (say 0.01).
+Dividing by 0.01 amplifies the noise by 100x at that subcarrier.
+
+This is the main weakness of ZF equalization. Better equalizers:
+  MMSE-EQ: tx_est(k) = H*(k) / (|H(k)|^2 + sigma^2) * rx(k)
+           This balances channel inversion with noise amplification.
+           For this simulator, ZF is sufficient as a starting point.
+
+================================================================================
+FILE: rx/demodulate.m
+BLOCK: 02 (RX side) — Soft QAM Demodulation
+================================================================================
+
+WHAT THIS FILE DOES
+-------------------
+Converts equalized complex symbols back to soft bit values (LLRs).
+This is the reverse of modulate.m but outputs soft values, not hard bits.
+
+HARD VS SOFT DEMODULATION
+--------------------------
+HARD demodulation:
+  Find the nearest constellation point, output 0/1 bits.
+  Simple but throws away confidence information.
+
+  Example: received symbol is very close to "00" point
+  Hard output: bits = [0, 0]
+  No information about HOW close it was.
+
+SOFT demodulation (what we do):
+  Compute a probability for each bit.
+  Output LLR = log(P(bit=0) / P(bit=1))
+
+  Example: received symbol very close to "00" point
+  Soft output: LLR = [+8.2, +7.5]  (very confident both are 0)
+
+  If symbol is ambiguous between "00" and "01":
+  Soft output: LLR = [+6.0, +0.3]  (confident bit 0 is 0, uncertain bit 1)
+
+The LDPC decoder uses the uncertainty information to:
+  - Rely heavily on confident bits when updating beliefs
+  - Weight uncertain bits less in parity check equations
+  - Achieve ~2-3 dB better performance than hard-decision decoding
+
+LLR MAGNITUDE AND SNR
+-----------------------
+The NoiseVariance parameter scales the LLR magnitudes correctly.
+
+At high SNR (low noise): LLRs have large magnitude (high confidence)
+At low SNR (high noise):  LLRs have small magnitude (low confidence)
+
+If NoiseVariance is wrong, LLR magnitudes are wrong, and the LDPC
+decoder performs suboptimally — curves shift in SNR.
+
+Always use noiseVar = 1/SNR_linear and make sure it matches the
+actual noise level in the simulation.
+
+================================================================================
+FILE: rx/ldpc_decode.m
+BLOCK: 08 — LDPC Decoding + CRC Check
+================================================================================
+
+WHAT THIS FILE DOES
+-------------------
+Takes soft LLR values and recovers the original information bits using
+belief propagation. Returns whether the block was decoded correctly (CRC).
+
+BELIEF PROPAGATION — INTUITION
+--------------------------------
+Imagine each bit has a "belief" about its value (the LLR).
+The LDPC graph connects bits through parity check equations.
+
+Each parity equation says: "these bits must XOR to 0."
+
+Belief propagation works like a committee of voters:
+  - Each bit starts with its own opinion (the LLR from demodulation)
+  - Bits connected by parity checks share their opinions
+  - Each parity check aggregates the opinions of its connected bits
+    and sends back a "corrected" message
+  - This repeats — opinions propagate across the graph
+  - After enough iterations, the beliefs converge on a valid codeword
+
+WHY IT WORKS: SPARSITY
+-----------------------
+If the graph had many connections (dense H), messages would circle
+back on themselves before converging — belief propagation would fail.
+
+The SPARSE structure of LDPC ensures messages travel along unique
+paths for many iterations before encountering the same information twice.
+This is why LDPC was called "Low-Density" — the parity check matrix H
+has very few 1s per row.
+
+EARLY TERMINATION
+-----------------
+After each iteration, check: does H * hard_bits = 0 (mod 2)?
+If yes — all parity checks pass — valid codeword found — stop early.
+
+At high SNR: converges in 3-5 iterations (errors were few)
+At low SNR:  needs all maxIter iterations (many errors to correct)
+
+Real Qualcomm modems use early termination with maxIter=5-10 to
+minimise decoding latency and power consumption per slot (0.5ms at mu=1).
+
+CRC — THE FINAL VALIDATOR
+--------------------------
+LDPC might decode to a valid codeword (H*c = 0) that is NOT the
+original codeword. This happens when noise is so severe that the
+decoder converges on a wrong codeword. This is called an UNDETECTED ERROR.
+
+The CRC (Cyclic Redundancy Check) catches these cases.
+3GPP specifies CRC-24A for 5G NR transport blocks — 24 parity bits
+appended to the data. False positive rate: 1 in 16,777,216 (2^24).
+
+For BLER measurement:
+  CRC pass (crcError=0) --> block received correctly --> no BLER contribution
+  CRC fail (crcError=1) --> block error --> blockErrors counter++
+
+BLER = blockErrors / totalBlocks  (measured over many blocks per SNR point)
+
+================================================================================

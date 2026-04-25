@@ -1,0 +1,134 @@
+================================================================================
+FILE: tx/modulate.m
+BLOCK: 02 — QAM Modulation
+================================================================================
+
+WHAT THIS FILE DOES
+-------------------
+Converts a stream of bits into complex numbers called symbols.
+Each symbol encodes multiple bits as a point in a 2D constellation diagram.
+
+Position in the TX chain:
+  [bits] --> [CRC] --> [LDPC] --> [modulate] <-- THIS FILE --> [OFDM] --> air
+
+WHY MODULATION EXISTS
+---------------------
+A radio signal has two dimensions you can use simultaneously:
+  - Amplitude (how strong the signal is)
+  - Phase (where in the cycle the signal starts)
+
+Together these define a point in 2D space (real + imaginary).
+By encoding information in both dimensions, you transmit more bits
+per radio symbol than if you used only one dimension.
+
+This 2D space is called the CONSTELLATION DIAGRAM.
+
+THE FOUR MODULATION ORDERS WE USE
+-----------------------------------
+
+QPSK (M=4) — 2 bits per symbol:
+  4 points arranged at the corners of a square:
+       Q
+       |
+  10 * | * 00
+  -----+-----  I
+  11 * | * 01
+       |
+  Each point is at 45°, 135°, 225°, 315°.
+  Robust — points are far apart so noise rarely causes wrong decisions.
+  Used at cell edge or low SNR conditions.
+
+16QAM (M=16) — 4 bits per symbol:
+  16 points in a 4×4 grid.
+  Twice the throughput of QPSK but points are closer together.
+  Needs higher SNR (~10 dB more than QPSK) to work reliably.
+
+64QAM (M=64) — 6 bits per symbol:
+  64 points in an 8×8 grid.
+  3x throughput of QPSK but needs much higher SNR (~18 dB).
+  Used when you're close to the base station.
+
+256QAM (M=256) — 8 bits per symbol:
+  256 points in a 16×16 grid.
+  Highest throughput, requires very high SNR (~24 dB).
+  Used in ideal conditions (indoor, LOS, 5G mmWave).
+
+ADAPTIVE MODULATION AND CODING (AMC)
+--------------------------------------
+5G NR measures your channel quality (CQI) and switches modulation
+order dynamically:
+
+  Cell edge (weak signal):  QPSK    -- protect reliability
+  Mid-cell:                 16QAM   -- balance throughput and reliability
+  Near base station:        64QAM   -- maximise throughput
+  Ideal conditions:         256QAM  -- push peak data rate
+
+This is one of the core functions of the Qualcomm modem — the baseband
+processor decides the modulation order every slot (0.5ms at 30kHz SCS).
+
+GRAY CODING — WHY IT MATTERS
+------------------------------
+The bit assignment to constellation points is carefully chosen so that
+ADJACENT points differ by only 1 bit.
+
+Without Gray coding:
+  A small noise push from point "0000" to neighbor "1111" = 4 bit errors
+
+With Gray coding:
+  A small noise push to any adjacent point = exactly 1 bit error
+
+This dramatically reduces the average bit error rate because most
+errors involve landing on a neighboring constellation point, not a
+faraway one. 3GPP mandates Gray coding in 5G NR.
+
+UNIT AVERAGE POWER NORMALISATION
+----------------------------------
+When you use more constellation points (higher M), the outer points
+are further from the origin. Without normalisation, 256QAM symbols
+would have much higher average power than QPSK symbols.
+
+'UnitAveragePower', true scales all constellations so:
+  mean(|symbols|^2) = 1   for all modulation orders
+
+This is critical for consistent SNR calculations throughout the
+simulator. If you don't normalise, your BLER curves will be wrong
+because the SNR you set won't match the actual Es/N0 at the receiver.
+
+SOFT LLR DEMODULATION (at the receiver — see rx/demodulate.m)
+--------------------------------------------------------------
+At the receiver, instead of making hard 0/1 decisions, the demodulator
+outputs LOG-LIKELIHOOD RATIOS (LLRs) for each bit:
+
+  LLR >> 0  -->  bit is very likely 0   (confident)
+  LLR << 0  -->  bit is very likely 1   (confident)
+  LLR  = 0  -->  completely uncertain
+
+The LDPC decoder uses these soft values — this is called soft-decision
+decoding and is significantly better than making hard decisions first.
+The LLR carries information about HOW uncertain the decision is, which
+the decoder uses to correct errors more reliably.
+
+MATLAB FUNCTION USED
+--------------------
+  qammod(bits, M, 'InputType', 'bit', 'UnitAveragePower', true)
+  From: MATLAB Communications Toolbox
+
+  Input:  bit vector, modulation order M
+  Output: complex symbol vector
+
+PARAMETERS IN THIS PROJECT
+---------------------------
+  M = 4   (QPSK) for the baseline simulation
+  M = 16  (16QAM) for the higher throughput comparison
+
+  Both use Gray coding and unit average power normalisation.
+
+POSITION IN THE TX CHAIN
+-------------------------
+  1. randi([0 1], K, 1)        -- generate K random information bits
+  2. nrCRCEncode(bits, '24A')  -- attach 24-bit CRC
+  3. ldpc_encode(crc, 1, 0.5)  -- LDPC encode
+  4. modulate(codeword, M)     <-- THIS FILE
+  5. ofdm_modulate.m           -- convert symbols to time-domain signal
+
+================================================================================

@@ -1,0 +1,155 @@
+================================================================================
+FILE: channel/awgn_channel.m
+BLOCK: 04 — AWGN Channel Model
+================================================================================
+
+WHAT THIS FILE DOES
+-------------------
+Adds realistic thermal noise to the transmitted signal at a specified SNR.
+This is the simplest channel model — the baseline before adding multipath fading.
+
+Position in the simulation pipeline:
+  TX chain --> awgn_channel <-- THIS FILE --> RX chain
+
+WHAT A CHANNEL IS
+-----------------
+In wireless communications, the CHANNEL is everything that happens to
+your signal between the transmitter antenna and the receiver antenna.
+
+It includes:
+  - Thermal noise (modelled here)
+  - Multipath fading (modelled later with TDL-C)
+  - Path loss (signal weakens with distance)
+  - Doppler shift (signal frequency shifts if transmitter/receiver moving)
+  - Interference from other users
+
+AWGN models only the thermal noise component. It is the irreducible
+noise floor present in every real receiver.
+
+THE NAME AWGN EXPLAINED
+------------------------
+ADDITIVE:
+  The noise is simply ADDED to the signal: rx = tx + noise
+  It is not multiplied or convolved — just added on top.
+  This is the simplest possible noise model.
+
+WHITE:
+  The noise power is equal at ALL frequencies — flat spectrum.
+  This is called "white" by analogy with white light, which
+  contains equal amounts of all colours (frequencies).
+  In practice, thermal noise is white over the bandwidths used in 5G.
+
+GAUSSIAN:
+  The amplitude of the noise follows a NORMAL (Gaussian) distribution.
+  At any given moment, the noise is equally likely to be positive or
+  negative, and large excursions are exponentially unlikely.
+  The central limit theorem ensures that the sum of many random
+  processes (which thermal noise is) follows a Gaussian distribution.
+
+WHY AWGN IS OUR BASELINE
+--------------------------
+1. VALIDATION:
+   AWGN has a known theoretical BER (bit error rate) formula:
+     BER_QPSK = Q(sqrt(2 * Eb/N0))
+   If your simulated BLER curve does not match this theory,
+   something is wrong in your TX or RX chain. Fix it before
+   adding the complexity of fading channels.
+
+2. SIMPLICITY:
+   No channel estimation needed for AWGN — h=1 everywhere.
+   You can verify LDPC, modulation, and OFDM work correctly
+   before adding the estimation blocks.
+
+3. REFERENCE:
+   Published research always shows AWGN curves alongside fading
+   curves. The gap between them quantifies how much the channel
+   degrades performance and how much your estimator recovers.
+
+THE NOISE VARIANCE FORMULA
+----------------------------
+For a unit-power signal (mean(|tx|^2) = 1):
+
+  SNR = signal_power / noise_power = 1 / noise_power
+  noise_power = 1 / SNR_linear
+
+For COMPLEX noise (which we use because 5G signals are complex):
+  The noise has real and imaginary components.
+  Each component has variance sigma^2 = noise_power / 2 = 1/(2*SNR_linear)
+
+  So each noise sample = sqrt(sigma^2) * (randn + j*randn)
+
+  The total noise power = sigma^2 (real) + sigma^2 (imag) = 2*sigma^2 = 1/SNR ✓
+
+DECIBELS EXPLAINED
+------------------
+SNR is expressed in decibels (dB) because wireless signals span many
+orders of magnitude and dB keeps the numbers manageable.
+
+  SNR_dB = 10 * log10(SNR_linear)
+
+  Converting back:
+  SNR_linear = 10^(SNR_dB / 10)
+
+  Examples:
+    0 dB  --> SNR_linear = 1      (signal = noise power)
+    3 dB  --> SNR_linear = 2      (signal 2x noise)
+   10 dB  --> SNR_linear = 10     (signal 10x noise)
+   20 dB  --> SNR_linear = 100    (signal 100x noise)
+  -5 dB  --> SNR_linear = 0.316   (noise > signal — very noisy!)
+
+In our BLER sweep we test SNR from -5 dB to +20 dB.
+At -5 dB noise dominates — BLER near 1.0 (almost everything fails).
+At +20 dB signal dominates — BLER near 0.0 (almost nothing fails).
+
+WHY WE NORMALISE TX POWER FIRST
+---------------------------------
+The SNR formula assumes signal power = 1.
+If we don't normalise, the actual SNR will differ from SNR_dB.
+
+For example: if tx has power 2.5 instead of 1:
+  Actual SNR = 2.5 / noise_power = 2.5 * SNR_linear
+  This means you're simulating 4 dB more SNR than intended.
+  Your BLER curve will be shifted and wrong.
+
+Always normalise before adding noise.
+
+WHAT CHANGES WHEN WE ADD FADING (for NN channel estimator)
+-----------------------------------------------------------
+AWGN:   rx = tx + noise          (h=1, trivial to equalise)
+Fading: rx = h * tx + noise      (h is complex, varies per subcarrier)
+
+The complex channel coefficient h:
+  - Different for each subcarrier (frequency selective)
+  - Changes over time as the user moves (time varying)
+  - Has amplitude fading (|h| < 1 means signal is attenuated)
+  - Has phase rotation (angle(h) rotates the constellation)
+
+Estimating h is the job of the LS, MMSE, and NN estimators.
+Without estimating h, equalization (dividing by h) is impossible.
+
+MATLAB FUNCTIONS USED
+----------------------
+  randn(size) -- generates real Gaussian random samples ~ N(0,1)
+  abs()       -- complex magnitude
+  mean()      -- arithmetic mean
+
+PARAMETERS IN THIS PROJECT
+---------------------------
+  SNR_range = -5:2:20 dB  (swept in the BLER measurement loop)
+  Signal:     unit power after normalisation
+
+THE BLER CURVE CONNECTION
+--------------------------
+We call awgn_channel once per simulated transport block, with the
+same SNR_dB for all blocks at a given SNR point in the sweep.
+
+Low SNR  (-5 dB):  lots of noise, many bit errors, LDPC cannot correct all
+                   --> many CRC failures --> high BLER (close to 1.0)
+
+High SNR (+15 dB): little noise, few bit errors, LDPC corrects all
+                   --> almost no CRC failures --> low BLER (close to 0.0)
+
+The transition between high and low BLER as SNR increases is the
+"waterfall curve" — the main result of the simulator.
+
+================================================================================

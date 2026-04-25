@@ -1,0 +1,153 @@
+================================================================================
+FILE: tx/ofdm_modulate.m
+BLOCK: 03 — OFDM Modulation
+================================================================================
+
+WHAT THIS FILE DOES
+-------------------
+Converts a 2D resource grid (frequency × time) of QAM symbols into a
+single time-domain waveform ready to be transmitted over the air.
+
+Position in the TX chain:
+  [bits] --> [CRC] --> [LDPC] --> [modulate] --> [ofdm_modulate] <-- THIS FILE --> air
+
+THE MULTIPATH PROBLEM OFDM SOLVES
+-----------------------------------
+When a signal travels from a base station to your phone, it bounces off
+buildings, cars, and trees. Multiple copies of the same signal arrive at
+slightly different times — this is called MULTIPATH.
+
+The result is FREQUENCY SELECTIVE FADING:
+  - Some frequencies are boosted (copies add constructively)
+  - Some frequencies are cancelled (copies cancel each other)
+  - The channel looks like a bumpy frequency response, not a flat one
+
+A traditional single-carrier system transmitting at high speed (e.g. 100 Mbps)
+has such a short symbol duration that the delayed copies overlap with the
+next symbol — this is INTERSYMBOL INTERFERENCE (ISI). It's very hard to
+correct and limits throughput severely.
+
+HOW OFDM SOLVES THIS
+---------------------
+Instead of one wideband signal, OFDM transmits N NARROW subcarriers
+simultaneously using the IFFT:
+
+    Frequency domain:  [ s0 | s1 | s2 | s3 | ... | sN ]
+                         each si is one QAM symbol on one subcarrier
+
+    IFFT converts this to a time-domain waveform containing all
+    subcarriers at once — no actual parallel hardware needed.
+
+Each subcarrier is so narrow that it sees a FLAT channel — the bumpy
+frequency response looks flat when you zoom in to a tiny bandwidth.
+A flat channel is trivially corrected by one complex division (equalization).
+
+ORTHOGONALITY
+-------------
+The subcarrier spacing is chosen so that subcarriers are ORTHOGONAL —
+they don't interfere with each other despite being transmitted at the
+same time. This requires the subcarrier spacing to equal 1/T where
+T is the OFDM symbol duration. The IFFT/FFT pair enforces this exactly.
+
+5G NR NUMEROLOGY
+-----------------
+5G NR supports multiple subcarrier spacings (numerologies):
+
+  mu=0:  15 kHz SCS,  Nfft=128,  Ncp=9   -- Sub-1GHz, wide coverage
+  mu=1:  30 kHz SCS,  Nfft=256,  Ncp=18  -- Main 5G FR1 deployment
+  mu=2:  60 kHz SCS,  Nfft=512,  Ncp=36  -- Low latency, unlicensed
+  mu=3: 120 kHz SCS,  Nfft=1024, Ncp=72  -- mmWave FR2
+
+This simulator uses mu=1 (30 kHz) with Nfft=512, Ncp=36.
+
+SLOT STRUCTURE
+--------------
+One 5G NR slot = 14 OFDM symbols (normal cyclic prefix)
+At mu=1: slot duration = 0.5 ms
+
+The resource grid has:
+  Rows: subcarriers (frequency) -- 12 subcarriers per resource block
+  Cols: OFDM symbols (time)     -- 14 per slot
+
+Not all resource elements carry data:
+  - Data REs:  QAM symbols from the LDPC-encoded bitstream
+  - Pilot REs: known reference symbols for channel estimation
+               (DMRS — Demodulation Reference Signal in 5G NR)
+
+THE CYCLIC PREFIX IN DETAIL
+-----------------------------
+For each OFDM symbol of length Nfft:
+
+  Original symbol:  [ s0  s1  s2  ...  sN-1 ]
+                                  ^last Ncp samples^
+
+  Cyclic prefix:    copy last Ncp samples to front:
+  Transmitted:      [ sN-Ncp  ...  sN-1 | s0  s1  ...  sN-1 ]
+                     ^------CP-------^   ^---OFDM symbol---^
+
+At the receiver:
+  1. The first Ncp samples contain the tail of the previous symbol
+     overlapping due to multipath — these are the "corrupted" samples
+  2. Strip the CP (discard first Ncp samples)
+  3. The remaining Nfft samples are clean — no ISI
+  4. Take FFT to recover the frequency-domain symbols
+
+This works as long as the multipath delay spread < CP duration.
+For 5G NR at mu=1: CP = 36 samples / 30.72 MHz = 1.17 μs
+This covers typical urban multipath delay spreads (< 1 μs).
+
+THE IFFT STEP
+-------------
+The IFFT takes N frequency-domain values (your QAM symbols on
+each subcarrier) and produces N time-domain samples.
+
+The key insight: the IFFT IS the OFDM modulator.
+It synthesises all N subcarriers simultaneously in one operation.
+At the receiver, the FFT IS the OFDM demodulator — one operation
+recovers all N subcarriers.
+
+This is why OFDM is computationally efficient — no actual bank of
+N oscillators needed. Just one IFFT/FFT pair.
+
+IFFTSHIFT
+---------
+By convention, the DC subcarrier (frequency 0) should be at the
+centre of the spectrum, not at position 0. ifftshift rearranges
+the frequency-domain vector so DC is at the centre before the IFFT.
+The receiver applies fftshift after the FFT to reverse this.
+
+POWER NORMALISATION
+-------------------
+Multiplying by sqrt(Nfft) after the IFFT normalises the signal so
+that the average power of the transmitted signal equals the average
+power of the input QAM symbols. This keeps SNR calculations consistent.
+
+MATLAB FUNCTIONS USED
+----------------------
+  ifft()     -- Inverse Fast Fourier Transform
+  ifftshift()-- Rearrange so DC is at centre before IFFT
+
+PARAMETERS IN THIS PROJECT
+---------------------------
+  Nfft = 512   (FFT size for 30 kHz SCS, 25 resource blocks)
+  Ncp  = 36    (normal cyclic prefix at mu=1)
+  Nsc  = 300   (25 RBs × 12 subcarriers = 300 active subcarriers)
+
+OUTPUT FORMAT
+-------------
+  txSignal is a complex column vector
+  Length = 14 symbols × (512 + 36) = 7672 samples per slot
+  Each sample is a complex number (I + jQ)
+  This maps directly to the in-phase and quadrature components
+  of the RF signal at the antenna
+
+POSITION IN THE TX CHAIN
+-------------------------
+  1. randi([0 1], K, 1)               -- generate K random bits
+  2. nrCRCEncode(bits, '24A')         -- attach 24-bit CRC
+  3. ldpc_encode(crc, 1, 0.5)         -- LDPC encode
+  4. modulate(codeword, M)            -- QAM modulate
+  5. [build resource grid]            -- place symbols + pilots into grid
+  6. ofdm_modulate(grid, Nfft, Ncp)  <-- THIS FILE
+
+================================================================================

@@ -1,0 +1,218 @@
+================================================================================
+FILE: ml/train_estimator.m  +  ml/estimate_nn.m
+BLOCK: 07 — Neural Network Channel Estimator
+================================================================================
+
+WHAT THESE FILES DO
+-------------------
+train_estimator.m:
+  Generates 100,000 synthetic training examples by simulating the channel
+  and trains a fully connected neural network to estimate H from noisy pilots.
+  Run ONCE. Saves the trained network to channel_net.mat.
+
+estimate_nn.m:
+  Uses the trained network to estimate the channel during simulation.
+  Called once per transport block in main_sim.m — one forward pass.
+
+THE CORE IDEA
+-------------
+LS and MMSE use mathematical formulas to estimate the channel.
+The neural network takes a completely different approach:
+
+  "Show me 100,000 examples of noisy channel observations and the
+   true channel that produced them. I will learn the mapping myself."
+
+Instead of deriving the optimal formula analytically, the network learns
+it from data through training (backpropagation + gradient descent).
+
+WHY THIS WORKS BETTER THAN MMSE AT LOW SNR
+--------------------------------------------
+MMSE requires:
+  - An explicit channel covariance matrix R_hh
+  - The current noise variance sigma^2
+  - A matrix inversion at pilot positions
+  - Linear operations only
+
+The neural network:
+  - Learns channel statistics implicitly from training data
+  - Handles any noise level it was trained on
+  - Can capture NONLINEAR relationships between noisy pilots and true channel
+  - Does denoising AND interpolation in one step — no separate interpolation
+
+At low SNR the channel estimate from LS is very noisy. A linear operation
+like MMSE can only do so much. The NN learned that "when pilots are this
+noisy AND the pattern looks like this, the true channel is probably X."
+It uses context from all pilot positions simultaneously.
+
+TRAINING DATA GENERATION — THE KEY STEP
+-----------------------------------------
+This is what most textbooks don't explain clearly.
+
+For each training example:
+  1. Pick a random SNR (uniform between -5 and +25 dB)
+     Why random? So the network learns to handle ALL operating conditions.
+     If you train at only 10 dB, it will fail at 0 dB.
+
+  2. Generate a random channel h (6-tap Rayleigh fading)
+     Why random? The network must generalise to channels it has never seen.
+     Each realisation has different amplitude and phase at each subcarrier.
+
+  3. Simulate what the receiver observes at pilot positions:
+     H_ls(k_p) = h(k_p) + noise   (noisy observation)
+     --> This is the INPUT
+
+  4. Record the true channel at ALL subcarriers:
+     h_freq (full, clean, all subcarriers)
+     --> This is the LABEL (what we want the network to output)
+
+After 100,000 examples the network has seen:
+  - Channels in deep fades and channels with strong signals
+  - Very noisy observations (low SNR) and clean ones (high SNR)
+  - Every possible combination of channel shape and noise level
+
+THE NETWORK ARCHITECTURE
+-------------------------
+
+  Input layer:     2 * Npilots neurons
+                   (real + imaginary parts of H_LS at pilots)
+                   e.g. 25 pilots --> 50 input neurons
+
+       ↓
+  FC layer 1:      256 neurons, ReLU
+                   Learns low-level features: "pilot k is high here"
+
+       ↓
+  FC layer 2:      256 neurons, ReLU
+                   Learns mid-level features: "channel has a peak around SC 50"
+
+       ↓
+  FC layer 3:      128 neurons, ReLU
+                   Bottleneck: compresses to essential channel structure
+
+       ↓
+  Output layer:    2 * Nsc neurons, NO activation
+                   (real + imaginary of H_est at all subcarriers)
+                   e.g. 300 subcarriers --> 600 output neurons
+
+WHY SPLIT COMPLEX INTO REAL + IMAGINARY?
+-----------------------------------------
+Neural networks operate on real numbers. Complex numbers are not
+natively supported by standard neural network frameworks.
+
+We represent complex H as two real vectors:
+  H = Re(H) + j*Im(H)
+  --> input  = [Re(H_ls_pilots), Im(H_ls_pilots)]   (real vector)
+  --> output = [Re(H_est_all),   Im(H_est_all)]     (real vector)
+
+At inference time we reconstruct: H_est = output(1:Nsc) + j*output(Nsc+1:end)
+
+This is equivalent to treating Re and Im as two separate channels
+that the network processes jointly — which works because real and
+imaginary parts of a wireless channel are correlated.
+
+LOSS FUNCTION: MEAN SQUARED ERROR
+-----------------------------------
+During training, the network minimises:
+
+  Loss = (1/N) * sum_i |H_true_i - H_predicted_i|^2
+
+This is Mean Squared Error (MSE) between predicted and true channel.
+
+For complex values expanded as real+imag:
+  Loss = mean over all subcarriers and all training examples of
+         (Re_true - Re_pred)^2 + (Im_true - Im_pred)^2
+
+The optimizer (Adam) computes gradients of this loss with respect to
+all network weights and updates them iteratively to minimise the loss.
+
+THE ADAM OPTIMIZER
+------------------
+Adam (Adaptive Moment Estimation) is the standard optimizer for neural networks.
+
+Standard gradient descent: weight = weight - lr * gradient
+Problem: same learning rate for all weights, can oscillate or converge slowly.
+
+Adam keeps track of:
+  m = running average of gradients (momentum)
+  v = running average of squared gradients (adaptive scaling)
+
+Update rule: weight = weight - lr * m / sqrt(v + epsilon)
+
+This automatically adjusts the effective learning rate per weight:
+  - Large gradients: smaller effective step (prevents overshooting)
+  - Small gradients: larger effective step (escapes flat regions)
+
+Result: faster convergence and more stable training than SGD.
+
+LEARNING RATE SCHEDULE
+-----------------------
+We start with lr=0.001 and drop by 50% every 15 epochs:
+
+  Epochs 1-15:  lr = 0.001   (explore broadly)
+  Epochs 16-30: lr = 0.0005  (refine)
+  Epochs 31-45: lr = 0.00025 (fine-tune)
+  Epochs 46-50: lr = 0.000125 (final polish)
+
+Why? Large learning rate early = fast progress.
+     Small learning rate late = precise convergence without overshooting.
+
+OVERFITTING AND VALIDATION
+---------------------------
+Overfitting = network memorises training data but fails on new data.
+Signs: training loss keeps decreasing, validation loss starts increasing.
+
+We prevent overfitting by:
+  1. Large training set (100,000 examples — much larger than the network)
+  2. Validation set (5,000 held-out examples)
+  3. Monitoring validation loss during training
+
+For this channel estimation problem, overfitting is unlikely because:
+  - The training distribution (random channels) is the same as test
+  - The network is not overly large for the problem size
+  - 100,000 examples >> network parameters
+
+INFERENCE: WHAT HAPPENS IN estimate_nn.m
+-----------------------------------------
+For each received transport block in main_sim.m:
+
+  1. Compute H_LS at pilots (one division, same as LS estimator)
+  2. Format as [Re, Im] real vector
+  3. Call predict(net, input) -- one forward pass through all layers
+  4. Reconstruct complex H_est from output
+
+The forward pass is:
+  x = input                          (2*Npilots values)
+  x = ReLU(W1 * x + b1)             (256 values)
+  x = ReLU(W2 * x + b2)             (256 values)
+  x = ReLU(W3 * x + b3)             (128 values)
+  output = W4 * x + b4              (2*Nsc values)
+
+Total operations: ~200,000 multiply-adds per block.
+On modern hardware: < 0.1 ms per block. Negligible overhead.
+
+EXPECTED PERFORMANCE IMPROVEMENT
+----------------------------------
+Typical results at 10% BLER:
+  LS estimator:    ~9  dB
+  MMSE estimator:  ~6  dB  (3 dB gain over LS)
+  NN estimator:    ~4  dB  (5 dB total gain over LS, 2 dB over MMSE)
+
+The NN advantage is largest at LOW SNR (-5 to +5 dB) where the noisy
+pilot observations give LS and MMSE the most trouble.
+
+At HIGH SNR (>15 dB) all three estimators converge — the channel is
+easily estimated from clean pilots regardless of method.
+
+HOW TO READ THE TRAINING PROGRESS PLOT
+----------------------------------------
+MATLAB shows a live plot during training. What to look for:
+
+  Training Loss:    should decrease steadily
+  Validation Loss:  should decrease and track training loss
+  RMSE:             Root MSE (sqrt of loss) — useful for scale
+
+Good training: both curves decrease together, then plateau.
+Overfitting:   training curve keeps falling, validation curve rises.
+Bad learning:  both curves flat from the start (lr too small or data issue).
+
+================================================================================

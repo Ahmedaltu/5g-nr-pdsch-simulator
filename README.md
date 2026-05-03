@@ -127,10 +127,7 @@ The `docs/` folder contains a standalone HTML site that walks through all 10 blo
 
 ## Background
 
-This simulator was built as part of Master's studies in electrical engineering at Aalto University, building on a Bachelor's thesis covering 5G network deployment on a Nokia-deployed network at Metropolia University of Applied Sciences (April 2024).
-
-The project covers the same type of physical layer algorithm evaluation and test vector work performed by 5G modem teams at companies including Nokia, Ericsson, and Qualcomm.
-
+The project covers the same type of physical layer algorithm evaluation and test vector work performed by 5G modem teams.
 ---
 
 ## Author
